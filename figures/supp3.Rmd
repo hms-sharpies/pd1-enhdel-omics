@@ -1,0 +1,384 @@
+---
+title: "Supplementary Figures 3 Panels"
+geometry: "margin=0.25in"
+header-includes:
+- \usepackage{helvet}
+- \usepackage[T1]{fontenc}
+- \renewcommand\familydefault{\sfdefault}
+- \pagenumbering{gobble}
+- \thispagestyle{plain}
+- \usepackage{setspace}\singlespacing
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+Genetic perturbation of PD-1 expression does not alter formation of exhausted CD8+ T cell subsets. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      message = FALSE,
+                      warning = FALSE, 
+                      fig.align = "center", 
+                      fig.height = 3,
+                      fig.width = 3*1.618)
+
+library(here)
+source(here("helper.R"))
+source(here("aesthetics.R"))
+```
+
+```{r read in data}
+so <- readRDS(here("scRNAseq", "data", "processed_data_objects", "00_seurat_workflow.so.rds"))
+
+umap_coords <- as_tibble(so@reductions$umap@cell.embeddings, rownames = "cell")
+metadata <- as_tibble(so@meta.data, rownames = "cell") %>% 
+  left_join(umap_coords, by = "cell") 
+
+sscores_df <- read_tsv(here("scRNAseq", "data", "processed_data_tables", 
+                            "04_vision.SigScores.tsv"))
+
+cluster_dge_df <- read_tsv(here("scRNAseq", "data", "processed_data_tables", 
+                                "01_dge.cluster_one-v-all.tsv"))
+
+tss_df <- read_tsv(here("ATACseq", "data", "processed_data_tables", 
+                        "00_qc.tss.tsv"))
+norm_counts_df <- read.table(here("ATACseq", "data", "processed_data_tables",
+                                  "01_analyze.NormCountsATAC.txt")) 
+```
+
+# Supplementary Figure 3a
+
+```{r violin_qc_list}
+orig.ident_pretty_key <- c(
+  "D1" = "EnhDel\n1",
+  "D2" = "EnhDel\n2",
+  "K1" = "KO\n1",
+  "K2" = "KO\n2",
+  "W1" = "WT\n1",
+  "W2" = "WT\n2"
+)
+violin_qc_skeleton <- metadata %>% 
+  mutate(orig.ident_pretty = orig.ident_pretty_key[orig.ident] %>% 
+           factor(levels = orig.ident_pretty_key)) %>% 
+  ggplot() + 
+  aes(orig.ident_pretty) + 
+  geom_violin(scale = "width", aes(fill = orig.ident), 
+              size = 0.2) + 
+  scale_fill_manual(values = palette_orig.ident) + 
+  theme(axis.title.y = element_blank(), 
+        axis.title.x = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        legend.position = "none", 
+        plot.title = element_text(hjust = 0.5))
+violin_qc_list <- list(
+  violin_qc_skeleton + aes(y = nCount_RNA) + ggtitle("nCount RNA"), 
+  violin_qc_skeleton + aes(y = nFeature_RNA) + ggtitle("nFeature RNA"), 
+  violin_qc_skeleton + aes(y = percent.mt) + ggtitle("% mitochondrial")
+)
+```
+
+```{r plot_supp3a, fig.width = 9}
+plot_supp3a <- function() {
+  plot_grid(plotlist = violin_qc_list, ncol = 3)
+}
+plot_supp3a()
+```
+
+# Supplementary Figure 3b
+
+```{r umap_reps}
+umap_reps <- metadata %>% 
+  mutate(rep = str_extract(orig.ident, ".$")) %>% 
+  mutate(rep = ifelse(rep == "1", "Replicate 1", "Replicate 2")) %>% 
+  mutate(genotype = genotype_key[genotype]) %>% 
+  ggplot() + 
+  aes(UMAP_1, UMAP_2, color = genotype) + 
+  geom_scattermore(pointsize = 3.1, pixels = c(1024, 1024)) + 
+  coord_fixed() + 
+  facet_grid(rep~genotype) + 
+  scale_color_manual(values = palette_genotype_named) +
+  xlab("UMAP dim. 1") + ylab("UMAP dim. 2") + 
+  theme(strip.background = element_blank(), 
+        legend.position = "none") +
+  guides(colour = guide_legend(override.aes = list(size = 2), 
+                               byrow = TRUE)) +
+  umap_theme() 
+```
+
+```{r plot_supp3b}
+plot_supp3b <- function() {
+  umap_reps
+}
+plot_supp3b()
+```
+
+# Supplementary Figure 3c
+
+```{r p_ridges}
+p_ridges <- sscores_df %>% 
+  select(cell, Hudson_Day45_Prog, Hudson_Day45_Trans, Hudson_Day45_Term) %>% 
+  pivot_longer(cols = 2:ncol(.), names_to = "gs_name") %>% 
+  mutate(gs_name = case_when(
+    gs_name == "Hudson_Day45_Prog" ~ "Prog. exhausted\n(vs. naive)", 
+    gs_name == "Hudson_Day45_Trans" ~ "Trans. exhausted\n(vs. naive)", 
+    gs_name == "Hudson_Day45_Term" ~ "Term. exhausted\n(vs. naive)"
+  )) %>% 
+  mutate(gs_name = factor(gs_name, levels = c("Prog. exhausted\n(vs. naive)", 
+                                              "Trans. exhausted\n(vs. naive)", 
+                                              "Term. exhausted\n(vs. naive)"))) %>% 
+  left_join(metadata, by = "cell") %>% 
+  mutate(Clusters = factor(Clusters, levels = rev(names(palette_cluster)))) %>% 
+  ggplot() + 
+  aes(value, Clusters, fill = Clusters) + 
+  geom_vline(xintercept = 0, color = "black", size = 0.25, linetype = "dotted") +
+  geom_density_ridges(rel_min_height = 0.01, size = 0.25) +
+  coord_cartesian() + 
+  facet_grid(~gs_name, scale = "free")  + 
+  scale_fill_manual(values = palette_cluster) + 
+  theme(legend.position = "none", 
+        axis.title = element_blank(), 
+        axis.ticks.y = element_blank(), 
+        axis.text.y = element_text(vjust = -3), 
+        strip.background = element_blank())
+```
+
+```{r plot_fig3c}
+plot_supp3c <- function() {
+  p_ridges
+}
+plot_supp3c()
+```
+
+# Supplementary Figure 3d
+
+```{r h_cluster_marker}
+topn <- 20
+topn_genes_per_cluster <- cluster_dge_df %>% 
+  group_by(cluster) %>% 
+  filter(p_val_adj < 0.05) %>% 
+  slice_max(order_by = avg_logFC, n = topn) %>% 
+  ungroup() %>% 
+  mutate(cluster = factor(cluster, levels = rev(names(palette_cluster)))) %>%
+  arrange(cluster) %>% 
+  .$gene %>% 
+  unique()
+
+cell_cluster_df <- metadata %>% 
+  # slice_sample(n = 10000) %>%  
+  mutate(Clusters = factor(Clusters, levels = names(palette_cluster))) %>% 
+  arrange(Clusters) %>% 
+  select(cell, Clusters) 
+
+h_mtx <- so@assays$RNA@scale.data[topn_genes_per_cluster, cell_cluster_df$cell]
+h_tidy <- h_mtx %>% 
+  as_tibble(rownames = "gene") %>% 
+  pivot_longer(2:ncol(.), 
+               names_to = "cell", 
+               values_to = "Scaled Expression") %>% 
+  mutate(cell = factor(cell, levels = cell_cluster_df$cell)) %>% 
+  mutate(gene = factor(gene, levels = topn_genes_per_cluster)) 
+```
+
+```{r h}
+h <- h_tidy %>%
+  ggplot() +
+  aes(cell, gene) +
+  ggrastr::rasterize(geom_tile(aes(
+    fill = `Scaled Expression`,
+    width = 1,
+    height = 1
+  ), size = 2), dpi = 200) +
+  scale_fill_gradient2(
+    low = "magenta",
+    mid = "black",
+    high = "yellow",
+    breaks = c(-2, 0, 2),
+    limits = c(-2, 2),
+    oob = scales::squish
+  ) +
+  theme(
+    axis.text.y = element_text(size = 3),
+    axis.text.x = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank(),
+    plot.margin = margin()
+  ) 
+```
+
+```{r h_top_ann}
+h_top_ann <- cell_cluster_df %>% 
+  mutate(cell = factor(cell, levels = .$cell)) %>% 
+  mutate(Clusters = factor(cluster_abbr_key[Clusters], levels = cluster_abbr_key)) %>% 
+  ggplot() + 
+  aes(cell, 0.5) + 
+  geom_col(aes(fill = Clusters), width = 1) +
+  geom_text(aes(x = center_cluster, y = 1, label = Clusters), 
+            size = TEXT_SIZE*GGPLOT_TEXT_SCALE_FACTOR, 
+            data = ~..1 %>% 
+              mutate(rank = row_number()) %>% 
+              group_by(Clusters) %>% 
+              summarise(center_cluster = as.integer(mean(rank)))) + 
+  scale_fill_manual(values = palette_cluster_abbr) + 
+  coord_cartesian(expand = TRUE, ylim = c(0, 2)) + 
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank())
+```
+
+```{r}
+# topn <- 20
+# topn_genes_per_cluster <- cluster_dge_df %>% 
+#   group_by(cluster) %>% 
+#   filter(p_val_adj < 0.05) %>% 
+#   slice_max(order_by = avg_logFC, n = topn) %>% 
+#   ungroup() %>% 
+#   mutate(cluster = factor(cluster, levels = rev(names(palette_cluster)))) %>%
+#   arrange(cluster) %>% 
+#   .$gene %>% 
+#   unique()
+# 
+# h <- DoHeatmap(
+#   so %>% set_idents("cluster_ids"),
+#   features = topn_genes_per_cluster,
+#   slot = "scale.data",
+#   label = FALSE
+# )
+```
+
+```{r plot_supp3d, fig.width = 7.5, fig.height = 7.5}
+plot_supp3d <- function() {
+  plot_grid(h_top_ann + theme(legend.position = "none"), h, 
+            align = "v", ncol = 1, rel_heights = c(1, 10), 
+            axis = "tblr")
+}
+plot_supp3d()
+```
+
+# Supplementary Figure 3e
+
+```{r pretty_name_key}
+pretty_name_key <- c(
+  "D_S" = "Enhdel Prog.", 
+  "K_S" = "PD-1 KO Prog.", 
+  "W_S" = "WT Prog.",
+  "D_CN" = "Enhdel Term.", 
+  "K_CN" = "PD-1 KO Term.", 
+  "W_CN" = "WT Term." 
+)
+```
+
+
+```{r tss_plot_df}
+tss_plot_df <- tss_df %>% 
+  mutate(genotype = str_extract(sample, ".")) %>%
+  mutate(sample = factor(pretty_name_key[sample], levels = pretty_name_key)) %>% 
+  mutate(bin = cut(pos, breaks = seq(-1000, 1000, 10))) %>%
+  group_by(bin, sample, genotype) %>%
+  summarise(mean_freq = mean(value), mean_pos = mean(pos), .groups = "drop")
+```
+
+```{r p_tss}
+p_tss <- tss_plot_df %>%
+  ggplot() +
+  aes(mean_pos, mean_freq, color = genotype) +
+  geom_line(aes(group = sample)) +
+  xlab("Genomic Region (5'->3')") +
+  ylab("Read Counts Frequency") +
+  facet_wrap(~sample, ncol = 3, scale = "free_x") +
+  scale_color_manual(values = palette_genotype) + 
+  theme(strip.background = element_blank(), 
+        legend.position = "none")
+```
+
+```{r plot_supp3e}
+plot_supp3e <- function() {
+  p_tss
+}
+plot_supp3e()
+```
+
+# Supplementary Figure 3f and 3g
+
+```{r rep_plot_df}
+rep_plot_df <- norm_counts_df %>% 
+  as_tibble(rownames = "peak_id") %>% 
+  pivot_longer(cols = 2:ncol(.), 
+               names_to = "sample", 
+               values_to = "norm counts") %>% 
+  mutate(rep = str_extract(sample, "[:digit:][:digit:]|[:digit:]")) %>% 
+  mutate(rep = ifelse(rep %in% c("1", "3"), "Replicate 1", "Replicate 2")) %>% 
+  mutate(genotype = str_extract(sample, ".")) %>% 
+  mutate(cluster = str_extract(sample, "_.*") %>% str_sub(start = 2)) %>% 
+  mutate(sample = paste0(genotype, "_", cluster)) %>% 
+  mutate(sample = factor(pretty_name_key[sample], levels = pretty_name_key)) %>% 
+  pivot_wider(id_cols = c(peak_id, sample), 
+              names_from = rep, 
+              values_from = "norm counts")
+```
+
+```{r p_rep}
+p_rep <- rep_plot_df %>% 
+  ggplot() + 
+  aes(log10(`Replicate 1`), log10(`Replicate 2`)) + 
+  geom_scattermore(pointsize = 1.1, pixels = c(1024, 1024)) + 
+  geom_abline(color = "red") +
+  facet_wrap(~sample, ncol = 3, scale = "free") + 
+  xlab("Norm. Counts Replicate 1") + 
+  ylab("Norm. Counts Replicate 2") +
+  xlim(0, 5.5) + ylim(0, 5.5) + 
+  theme(strip.background = element_blank(), 
+        aspect.ratio = 1) 
+```
+
+```{r plot_supp3fg}
+plot_supp3fg <- function() {
+  p_rep
+}
+plot_supp3fg()
+```
+
+# Supplementary Figure 3 Layout
+
+\newpage
+
+Supplementary Figure 3. 
+
+```{r Supplementary Figure 3, fig.height = 10, fig.width = 7.5}
+theme_set(figure_layout_theme())
+
+r1_height <- 0.12; r1_bot_align <- 1 - r1_height
+r2_height <- 0.2; r2_bot_align <- r1_bot_align - r2_height
+r3_height <- 0.4; r3_bot_align <- r2_bot_align - r3_height
+r4_height <- 1 - (r1_height + r2_height + r3_height); r4_bot_align <- 0
+
+ggdraw() + 
+  draw_plot(plot_supp3a(), 0, r1_bot_align, 0.8, r1_height) + 
+  draw_plot(plot_grid(plot_supp3b() + 
+                        theme(axis.title.x = element_text(vjust = 4), 
+                              axis.title.y = element_text(vjust = -3)), 
+                      plot_supp3c(), 
+                      ncol = 2, align = "hv", axis = "tblr"), 
+            0, r2_bot_align, 0.8, r2_height) + 
+  draw_plot(plot_supp3d(), 0.2, r3_bot_align, 0.6, r3_height) +  
+  draw_plot(plot_grid(plot_supp3e(), plot_supp3fg(), 
+                      ncol = 2, align = "hv", axis = "tblr"), 
+            0, r4_bot_align, 1, r4_height) +  
+  draw_plot_label(label = c("a", "b", "c", "d", "e", "f"), 
+                  size = TEXT_SIZE, 
+                  x = c(0, 0, 0.4, 0.2, 0, 0.5), 
+                  y = c(r1_height + r1_bot_align, 
+                        r2_height + r2_bot_align, 
+                        r2_height + r2_bot_align, 
+                        r3_height + r3_bot_align, 
+                        r4_height, r4_height))
+```
+
+\newpage 
+
+```{r sessionInfo}
+sessionInfo()
+```
+

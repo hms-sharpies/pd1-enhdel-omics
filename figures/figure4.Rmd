@@ -1,0 +1,428 @@
+---
+title: "Figures 4 Panels"
+geometry: "margin=0.25in"
+header-includes:
+  - \usepackage{helvet}
+  - \usepackage[T1]{fontenc}
+  - \renewcommand\familydefault{\sfdefault}
+  - \pagenumbering{gobble}
+  - \thispagestyle{plain}
+  - \usepackage{setspace}\singlespacing
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      message = FALSE,
+                      warning = FALSE, 
+                      fig.align = "center",
+                      fig.height = 3, 
+                      fig.width = 3*1.618)
+
+library(here)
+library(DESeq2)
+source(here("helper.R"))
+detach("package:SeuratObject", unload = T)
+source(here("aesthetics.R"))
+
+```
+
+```{r read in data}
+deseq_list <- readRDS(here("scRNAseq", "data", "processed_data_objects", 
+                           "05_pseudobulk.deseq_list.rds"))
+rlog_list <- map(deseq_list, rlog, blind = TRUE)
+
+pca_loadings <- read_tsv(here("scRNAseq", "data", "processed_data_tables", 
+                              "05_pseudobulk.pca_loadings.tsv"))
+# flip coordinates for effector-like to be consistent
+pca_loadings <- pca_loadings %>% 
+  mutate(PC1 = ifelse(cluster_id == "effector-like", -PC1, PC2))
+norm_counts <- read_tsv(here("scRNAseq", "data", "processed_data_tables",
+                             "05_pseudobulk.norm_counts.tsv"))
+
+gsea_df <- read_tsv(here(
+  "scRNAseq", "data", "processed_data_tables",
+  "03_gsea.genotype_one-v-one_per-cluster_log2FC.tsv"
+))
+
+dge_df <- read_tsv(here("scRNAseq", "data", "processed_data_tables", 
+                        "01_dge.genotype_one-v-one_per-cluster.tsv"))
+gene_sig_df <- read_tsv(here("scRNAseq", "data", "gene_signatures", 
+                             "02_gene_signatures.msigdbr_H-C2-C7.tsv"))
+
+pb_pca_genes <- read_tsv(here("scRNAseq", "data", "gene_signatures", "pb_pca_genes.tsv"))
+```
+
+# Figure 4a
+
+```{r pca_list}
+pca_list <- imap(
+  rlog_list[c("progenitor", "effector-like", "transitory", "terminal")],  
+  ~{
+    DESeq2::plotPCA(..1, intgroup = "genotype", ntop = dim(..1)[1]) + 
+      scale_color_manual(values = palette_genotype, 
+                         labels = c("WT", "EnhDel", "PD-1 KO")) + 
+      scale_x_continuous(expand = c(0.1, 0.1)) + 
+      scale_y_continuous(expand = c(0.1, 0.1)) + 
+      ggtitle(..2) + 
+      theme(legend.key.height = unit(10, "pt"))
+  }) 
+pca_list$`effector-like`[["data"]][["PC1"]] <- -pca_list$`effector-like`[["data"]][["PC1"]]
+```
+
+```{r plot_fig4a, fig.height = 4, fig.width = 4*1.618}
+plot_fig4a <- function(pt_size = 1) {
+  plot_grid_shared_legend(
+    plotlist = pca_list %>% 
+      map(function(pca_plot) {
+        # shrink point size to 1
+        pca_plot[["layers"]][[1]][["aes_params"]][["size"]] <- pt_size
+        return(pca_plot)
+      }), 
+    align = "hv", legend.position = "right"
+  )
+}
+plot_fig4a(pt_size = 3)
+```
+
+# Figure 4b
+
+```{r mean_scaled_norm_counts}
+scaled_norm_counts <- norm_counts %>% 
+  pivot_longer(cols = 2:ncol(.), 
+               names_to = "sample_genotype_cluster", 
+               values_to = "norm_counts") %>% 
+  separate(sample_genotype_cluster, into = c("sample", "genotype", "cluster"), 
+           sep = "_") %>% 
+  group_by(gene, cluster) %>% 
+  mutate(scaled_norm_counts = as.vector(scale(norm_counts, center = FALSE))) %>% 
+  mutate(scaled_norm_counts = ifelse(is.na(scaled_norm_counts), 0, 
+                                     scaled_norm_counts)) 
+mean_scaled_norm_counts <- scaled_norm_counts %>% 
+  group_by(genotype, cluster, gene) %>% 
+  summarise(avg_scaled_norm_counts = mean(scaled_norm_counts)) %>% 
+  pivot_wider(id_cols = gene, 
+              names_from = c(genotype, cluster), 
+              values_from = avg_scaled_norm_counts)
+mean_scaled_norm_counts_mtx <- mean_scaled_norm_counts %>% 
+  column_to_rownames("gene") %>% 
+  as.matrix()
+```
+
+```{r h_list}
+h_list <- list()
+col_fun <- colorRamp2(breaks = c(0.8, 1.4), colors = c("white", "darkgreen"))
+for (cluster_str in names(palette_cluster)) {
+  if (cluster_str == "dividing")
+    next
+  pc2_genes <- pca_loadings %>%
+    filter(cluster_id == cluster_str) %>% 
+    arrange(desc(PC2)) %>% 
+    .$gene
+  h_mtx <- mean_scaled_norm_counts_mtx[pc2_genes, paste0(c("W", "D", "K"), "_", cluster_str)]
+  colnames(h_mtx) <- c("WT", "EnhDel", "PD-1 KO")
+  
+  selected_genes <- pb_pca_genes %>% 
+    filter(PC == "PC2") %>% 
+    filter(Clusters == cluster_str) %>% 
+    .$gene
+  selected_genes <- selected_genes[selected_genes %in% pc2_genes]
+  ha <- rowAnnotation(
+    gene = anno_mark(
+      at = map_int(selected_genes, ~which(pc2_genes == ..1)), 
+      labels = selected_genes, 
+      link_gp = gpar(lwd = LINE_WIDTH), 
+      labels_gp = gpar(fontsize = TEXT_SIZE), 
+      padding = unit(5, "mm")
+    )
+  )
+  
+  h_list[[cluster_str]] <- Heatmap(
+    h_mtx, 
+    column_title = cluster_abbr_key[cluster_str], 
+    column_title_gp = gpar(fontsize = TEXT_SIZE), 
+    col = col_fun, 
+    name = "mean scaled norm counts", 
+    cluster_rows = FALSE, 
+    cluster_columns = FALSE, 
+    column_names_gp = gpar(fontsize = TEXT_SIZE),
+    show_row_names = FALSE, 
+    right_annotation = ha
+  )
+}
+```
+
+```{r loading arrow}
+loading_arrow <- ggplot() + 
+  geom_segment(aes(x = 0, xend = 0, y = -3, yend = 3), 
+               arrow = arrow(length = unit(TEXT_SIZE / 2, "pt"), 
+                             type = "closed"), 
+               size = LINE_WIDTH) + 
+  annotate("text", label = "PC2 loading", 
+           x = -0.5, y = 0, angle = 90,
+           size = TEXT_SIZE*GGPLOT_TEXT_SCALE_FACTOR) + 
+  ylim(-4.5, 4.5) + xlim(-1, 1) + 
+  theme_void()
+```
+
+```{r plot_fig4b, fig.width = 7}
+plot_fig4b <- function() {
+  h_list_draw <- h_list %>% 
+    map(~..1 %>% 
+          draw(show_heatmap_legend = FALSE) %>% 
+          grid.grabExpr()) %>% 
+    plot_grid(plotlist = ., ncol = 4)
+  lgd <- Legend(col_fun = col_fun, title = "expr.", 
+                grid_width = LEGEND_SIZE,
+                title_gp = gpar(fontsize = TEXT_SIZE, fontface = "bold"), 
+                labels_gp = gpar(fontsize = TEXT_SIZE)) %>% 
+    draw() %>% grid.grabExpr()
+  plot_grid(loading_arrow, h_list_draw, lgd, 
+            ncol = 3, rel_widths = c(1, 8, 1))
+}
+plot_fig4b()
+```
+
+# Figure 4c
+
+```{r rank_plot_df and select_gs_df}
+selected_gs <- c(
+  "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP" = "Effector vs exhausted",
+  "HALLMARK_OXIDATIVE_PHOSPHORYLATION" = "Oxidative phosphorylation",
+  "ZHENG_BOUND_BY_FOXP3" = "Bound by FoxP3",
+  "GSE14350_TREG_VS_TEFF_UP" = "Treg vs Teff",
+  "HAMAI_APOPTOSIS_VIA_TRAIL_UP" = "Apoptosis"
+)
+palette_gs <- palette_social[1:length(selected_gs)] %>% 
+  set_names(selected_gs)
+rank_plot_df <- gsea_df %>% 
+  filter(Clusters %in% c("progenitor", "terminal")) %>% 
+  filter(contrast %>% str_detect("D")) %>% 
+  group_by(Clusters, contrast) %>% 
+  arrange(sscore) %>% 
+  mutate(rank = row_number())
+select_gs_df <- rank_plot_df %>% 
+  filter(gs_name %in% names(selected_gs)) %>% 
+  mutate(gs_name = factor(selected_gs[gs_name], levels = selected_gs))
+```
+
+```{r plot_gs_rank and plot_arrow_gs_rank}
+plot_gs_rank <- function(g1 = "D", g2, rasterize = TRUE) {
+  contrast_str <- paste0(g1, "_", g2)
+  if (rasterize) {
+    p <- rank_plot_df %>% 
+      filter(contrast == contrast_str) %>% 
+      ggplot() + 
+      aes(rank, sscore, color = ifelse(q.val < 0.05, "signif.", "n.s.")) + 
+      geom_scattermore(color = "black", 
+                       pixels = c(ceiling(1024*1.618*2), 1024*2), 
+                       pointsize = 10.2) +
+      geom_hline(yintercept = 0, linetype = "dotted", size = LINE_WIDTH) + 
+      geom_point(aes(color = gs_name), 
+                 data = select_gs_df %>% filter(contrast == contrast_str), 
+                 size = 3) + 
+      geom_text_repel(aes(color = gs_name, label = gs_name), 
+                      data = select_gs_df %>% filter(contrast == contrast_str), 
+                      size = TEXT_SIZE*GGPLOT_TEXT_SCALE_FACTOR, 
+                      direction = "x") + 
+      facet_wrap(~Clusters, ncol = 4, scale = "free") + 
+      scale_color_manual(values = palette_gs) + 
+      ylim(-4.5, 4.5) + 
+      labs(x = "Rank") + 
+      theme(legend.position = "above", 
+            legend.direction = "horizontal", 
+            strip.background = element_blank(), 
+            aspect.ratio = 1/1.618)
+  } else {
+    p <- rank_plot_df %>% 
+      filter(contrast == contrast_str) %>% 
+      ggplot() + 
+      aes(rank, sscore, color = ifelse(q.val < 0.05, "signif.", "n.s.")) + 
+      geom_point(color = "black", size = 0.15) +
+      geom_hline(yintercept = 0, linetype = "dotted", size = LINE_WIDTH) + 
+      geom_point(aes(color = gs_name), 
+                 data = select_gs_df %>% filter(contrast == contrast_str), 
+                 size = 3) + 
+      geom_text_repel(aes(color = gs_name, label = gs_name), 
+                      data = select_gs_df %>% filter(contrast == contrast_str), 
+                      size = TEXT_SIZE*GGPLOT_TEXT_SCALE_FACTOR, 
+                      direction = "x") + 
+      facet_wrap(~Clusters, ncol = 4, scale = "free") + 
+      scale_color_manual(values = palette_gs) + 
+      ylim(-4.5, 4.5) + 
+      labs(x = "Rank") + 
+      theme(legend.position = "above", 
+            legend.direction = "horizontal", 
+            strip.background = element_blank(), 
+            aspect.ratio = 1/1.618)
+  }
+
+  return(p)
+}
+plot_arrow_gs_rank <- function(g1 = "D", g2) {
+  g1_str <- ifelse(g1 == "D", "EnhDel", "PD-1 KO")
+  g2_str <- ifelse(g2 == "K", "PD-1 KO", "WT")
+  ggplot() + 
+    geom_segment(aes(x = 0, xend = 0, y = -3, yend = 3), 
+                 arrow = arrow(ends = "both", 
+                               length = unit(TEXT_SIZE / 2, "pt"), 
+                               type = "closed"), 
+                 size = LINE_WIDTH) + 
+    annotate("text", label = paste0("Enriched\nin ", g1_str), 
+             x = 0, y = 2.5, 
+             size = TEXT_SIZE*GGPLOT_TEXT_SCALE_FACTOR) + 
+    annotate("text", label = paste0("Enriched\nin ", g2_str), 
+             x = 0, y = -2.5, 
+             size = TEXT_SIZE*GGPLOT_TEXT_SCALE_FACTOR) + 
+    ylim(-4.5, 4.5) + 
+    theme_void()
+}
+
+```
+
+```{r plot_fig4c and 4d, fig.width = 7, fig.asp = 1/3}
+plot_fig4c <- function(rasterize = TRUE) {
+  plot_grid(plot_arrow_gs_rank(g2 = "K"), plot_gs_rank(g2 = "K", rasterize = rasterize),
+            ncol = 2, rel_widths = c(1, 6))
+}
+plot_fig4d <- function(rasterize = TRUE) {
+  plot_grid(plot_arrow_gs_rank(g2 = "W"), plot_gs_rank(g2 = "W", rasterize = rasterize),
+            ncol = 2, rel_widths = c(1, 6))
+}
+plot_fig4c()
+plot_fig4d()
+plot_fig4c(rasterize = FALSE)
+plot_fig4d(rasterize = FALSE)
+```
+
+# Figure 4e and 4f
+
+```{r rank_vec_list}
+rank_vec_list <- dge_df %>% 
+  mutate(Clusters = factor(Clusters, levels = names(palette_cluster))) %>% 
+  arrange(Clusters) %>% 
+  filter(Clusters != "dividing") %>% 
+  filter(contrast != "K_W") %>% 
+  named_group_split(contrast, Clusters) %>% 
+  map(~{set_names(.$avg_logFC, .$gene)})
+
+oxphos_genes <- gene_sig_df %>% 
+  filter(gs_name == "HALLMARK_OXIDATIVE_PHOSPHORYLATION") %>% 
+  .$gene_symbol
+oxphos_leg_list <- rank_vec_list %>% 
+  imap(~get_leading_edge_df(..1, oxphos_genes) %>% 
+         mutate(Clusters_contrast = ..2) %>% 
+         separate(Clusters_contrast, into = c("contrast", "Clusters"), sep = " / "))
+oxphos_df <- gsea_df %>% 
+  filter(gs_name == "HALLMARK_OXIDATIVE_PHOSPHORYLATION") 
+
+effexh_genes <- gene_sig_df %>% 
+  filter(gs_name == "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP") %>% 
+  .$gene_symbol
+effexh_leg_list <- rank_vec_list %>% 
+  imap(~get_leading_edge_df(..1, effexh_genes) %>% 
+         mutate(Clusters_contrast = ..2) %>% 
+         separate(Clusters_contrast, into = c("contrast", "Clusters"), sep = " / "))
+effexh_df <- gsea_df %>% 
+  filter(gs_name == "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP") 
+```
+
+```{r cluster and contrast ann}
+cluster_ann <- tibble(Clusters = factor(names(palette_cluster_abbr), 
+                                        levels = names(palette_cluster_abbr))) %>% 
+  filter(Clusters != "div.") %>% 
+  ggplot() + 
+  aes(Clusters, 0, label = Clusters) + 
+  geom_text(size = TEXT_SIZE*GGPLOT_TEXT_SCALE_FACTOR) + 
+  theme_void()
+contrast_ann <- tibble(contrast = c("EnhDel\nvs.\nPD-1 KO", "EnhDel\nvs.\nWT")) %>% 
+  ggplot() + 
+  aes(0, contrast, label = contrast) + 
+  geom_text(size = TEXT_SIZE*GGPLOT_TEXT_SCALE_FACTOR) + 
+  theme_void()
+```
+
+```{r}
+theme_set(figure_layout_theme())
+```
+
+```{r plot_fig4e, fig.width = 7, fig.asp = 1/3}
+plot_fig4e <- function(rel_plot_size = 2, 
+                       rel_heights = c(1, 9), 
+                       rel_widths = c(1, 12)) {
+  p <- plot_gsea_curve_grid(effexh_leg_list, effexh_df, 
+                            rel_plot_size = rel_plot_size)
+  plot_grid(
+    NULL, cluster_ann + 
+      annotate("text", x = 0.5, y = 1, label = "Effector vs exhausted", size = PLOT_TITLE_SIZE*GGPLOT_TEXT_SCALE_FACTOR, hjust = 0) + 
+      ylim(-0.5, 1.5) + 
+      scale_x_discrete(expand = c(0, 0.5)), 
+    contrast_ann, p, 
+    ncol = 2, rel_heights = rel_heights, rel_widths = rel_widths
+  )
+}
+plot_fig4e(rel_plot_size = 1.75)
+```
+
+```{r plot_fig4f, fig.width = 7, fig.asp = 1/3}
+plot_fig4f <- function(rel_plot_size = 2, 
+                       rel_heights = c(1, 9), 
+                       rel_widths = c(1, 12)) {
+  p <- plot_gsea_curve_grid(oxphos_leg_list, oxphos_df, 
+                            rel_plot_size = rel_plot_size)
+  plot_grid(
+    NULL, cluster_ann + 
+      annotate("text", x = 0.5, y = 1, label = "Oxidative phosphorylation", size = PLOT_TITLE_SIZE*GGPLOT_TEXT_SCALE_FACTOR, hjust = 0) + 
+      ylim(-0.5, 1.5) + 
+      scale_x_discrete(expand = c(0, 0.5)), 
+    contrast_ann, p, 
+    ncol = 2, rel_heights = rel_heights, rel_widths = rel_widths
+  )
+}
+plot_fig4f(rel_plot_size = 1.75)
+```
+
+# Figure 4 Panel Layout
+
+\newpage
+
+Figure 4. Enhancer deletion confers unique transcriptional programs in exhausted CD8+ T cells, distinct from PD-1 KO and WT
+
+```{r Figure 4, fig.height = 10, fig.width = 7.5}
+theme_set(figure_layout_theme())
+
+r1_height <- 0.25
+r1_bot_align <- 1 - r1_height
+r2_height <- 0.2
+r2_bot_align <- r1_bot_align - r2_height
+r3_height <- 0.25
+r3_bot_align <- r2_bot_align - r3_height - 0.025
+r4_height <- 0.25
+r4_bot_align <- 0
+
+ggdraw() + 
+  draw_plot(plot_fig4a(), 0, r1_bot_align, 0.4, r1_height) +
+  draw_plot(plot_fig4b(), 0.4, r1_bot_align, 0.6, r1_height) + 
+  draw_plot(plot_grid(plot_fig4c(), plot_fig4d()), 
+            0, r2_bot_align, 1, r2_height) +
+  draw_plot(plot_fig4e(), 0, r3_bot_align, 1, r3_height) +
+  draw_plot(plot_fig4f(), 0, r4_bot_align, 1, r4_height) +
+  draw_plot_label(label = c("a", "b", "c", "d", "e", "f"), 
+                  size = PLOT_TITLE_SIZE, 
+                  x = c(0, 0.4, 0, 0.5, 0, 0), 
+                  y = c(r1_height + r1_bot_align, 
+                        r1_height + r1_bot_align, 
+                        r2_height + r2_bot_align, 
+                        r2_height + r2_bot_align, 
+                        r3_height + r3_bot_align, 
+                        r4_bot_align + r4_height))
+```
+
+\newpage
+
+```{r sessionInfo}
+sessionInfo()
+```

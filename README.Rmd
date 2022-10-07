@@ -1,0 +1,72 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# pd1-enhdel-omics
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+This repository provides code to reproduce results and figures from **Deletion of an exhaustion-specific PD-1 enhancer improves T cell function and viral control**.
+
+The associated GEO repository is GSE212507. Additionally, the single cell counts matrices and other associated data tables have been uploaded to the Single Cell Portal under the [PD-1 enhancer deletion](https://singlecell.broadinstitute.org/single_cell/study/SCP1772/pd-1-enhancer-deletion). 
+
+## Contents
+
+ - `scRNAseq`: directory containing the data and scripts for reproducing scRNA-seq analyses and figures
+ - `ATACseq`: directory containing the data and scripts for reproducing ATAC-seq analyses and figures
+ - `figures`: directory containing the scripts to reproduce the figures
+ - `renv`: directory containing all information for tracking R package versioning and downloads. See [Introduction to renv](https://rstudio.github.io/renv/articles/renv.html) for details
+ - `aesthetics.R`: file containing aesthetics and themes for the project
+ - `helper.R`: file containing libraries and helper functions
+ - `driver.R`: optional script to regenerate all intermediate results. May take a long time (> 24 hours) to execute. 
+ 
+## Instructions
+
+To regenerate figures from raw data, take the following steps: 
+
+1. Clone the GitHub. 
+2. Restore the renv environment from the renv.lock file, using `renv::restore()`. The [VISION package](https://github.com/YosefLab/VISION), a signature scoring method developed by the Yosef lab, may have to be manually installed from their GitHub repository. The package can be installed using `devtools` by running the code below: 
+
+```
+library(devtools)
+devtools::install_github("YosefLab/VISION")
+```
+
+3. Download the single cell counts matrices from the Single Cell Portal and place them in the `scRNAseq/data/counts_matrices`. 
+4. Regenerate all intermediate data tables and objects by running the script `driver.R`. Warning: It may take a long time, >24 hours depending on compute power, to execute. 
+5. Use Rmarkdown to knit the `.Rmd` files in the `figures/` directory to output the figures in either HTML or PDF format. 
+
+Alternatively, to bypass the long compute time in step 3, follow the instructions below to generate/acquire processed data files, then knit the `.Rmd` files in the `figures/` directory. 
+
+1. Run the script at `scRNAseq/scripts/02_gene_signatures` to generate the `scRNAseq/data/gene_signatures/02_gene_signatures.msigdbr_H-C2-C7.tsv`
+2. Download the processed data files from the Study Files section [Single Cell Portal](https://singlecell.broadinstitute.org/single_cell/study/SCP1772/pd-1-enhancer-deletion#study-download) and place them at the following paths. 
+
+* scRNAseq/data/counts_matrices.zip -> decompress
+* scRNAseq/data/processed_data_tables.zip -> decompress
+* scRNAseq/data/processed_data_objects/00_seurat_workflow.so.rds
+* scRNAseq/data/processed_data_objects/05_pseudobulk.deseq_list.rds
+
+## Contact 
+
+Please contact a corresponding author for any questions, comments, or concerns regarding the paper in general.
+
+## Compute environment and version
+
+```{r}
+sessionInfo()
+```
+
+### A note on reproducibility
+
+Anyone running the code should use the same R and R package versions as defined by `renv`. However, I cannot guarantee that one will get the exact same results in the single cell clustering unless one also ensures that they are using the same processor and operating system. See [this discussion](https://github.com/scverse/scanpy/issues/2014) about problems in reproducibility of single cell clustering analyses persisting in Scanpy. 

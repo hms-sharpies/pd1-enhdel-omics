@@ -1,0 +1,443 @@
+---
+title: "Figures 3 Panels"
+geometry: "margin=0.25in"
+header-includes:
+- \usepackage{helvet}
+- \usepackage[T1]{fontenc}
+- \renewcommand\familydefault{\sfdefault}
+- \pagenumbering{gobble}
+- \thispagestyle{plain}
+- \usepackage{setspace}\singlespacing
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      message = FALSE,
+                      warning = FALSE, 
+                      fig.align = "center",
+                      fig.height = 3, 
+                      fig.width = 3*1.618)
+
+library(here)
+source(here("helper.R"))
+source(here("aesthetics.R"))
+```
+
+```{r read in data}
+so <- readRDS(here("scRNAseq", "data", "processed_data_objects", "00_seurat_workflow.so.rds"))
+
+umap_coords <- as_tibble(so@reductions$umap@cell.embeddings, rownames = "cell")
+metadata <- as_tibble(so@meta.data, rownames = "cell") %>% 
+  left_join(umap_coords, by = "cell")
+
+norm_counts_df <- read.table(here("ATACseq", "data", "processed_data_tables",
+                                  "01_analyze.NormCountsATAC.txt")) 
+results_tidy <- read_tsv(here("ATACseq", "data", "processed_data_tables", 
+                              "01_analyze.deseq_results_tidy.tsv"))
+results_W_S.v.CN <- read_tsv(here("ATACseq", "data", "processed_data_tables",
+                                  "01_analyze.deseq_results_W_S.v.CN.csv"))
+```
+
+# Figure 3c
+
+```{r plot_fig3c, fig.height = 3, fig.width = 3*1.618}
+plot_fig3c <- function(pointsize = 2, 
+                       pixels = c(2048, 2048), 
+                       legend_pt_size = 2, 
+                       shift_axis.title.x = 4, 
+                       shift_axis.title.y = -3) {
+  metadata %>% 
+    ggplot() + 
+    aes(UMAP_1, UMAP_2, color = Clusters) +
+    geom_scattermore(pointsize = pointsize, pixels = c(2048, 2048), 
+                     interpolate = TRUE) + 
+    coord_fixed() + 
+    scale_color_manual(values = palette_cluster) +
+    xlab("UMAP dim. 1") + ylab("UMAP dim. 2") + 
+    guides(colour = guide_legend(override.aes = list(size = legend_pt_size), 
+                                 byrow = TRUE)) +
+    umap_theme() + 
+    theme(legend.spacing.y = unit(1/16, "inch"), 
+          axis.title.x = element_text(vjust = shift_axis.title.x), 
+          axis.title.y = element_text(vjust = shift_axis.title.y))
+}
+plot_fig3c(legend_pt_size = 3, 
+           shift_axis.title.x = 0.5, 
+           shift_axis.title.y = 0)
+```
+
+# Figure 3d
+
+```{r p_umaps_genes}
+genes_of_interest <- c("Tox", "Tcf7", "Havcr2", "Cx3cr1", "Cd101", "Mki67") %>% 
+  rlang::set_names()
+genes_df <- so@assays$RNA@data[genes_of_interest, ] %>% 
+  as.matrix() %>% t() %>% 
+  as_tibble(rownames = "cell") %>% 
+  left_join(umap_coords, by = "cell")
+genes_tidy <- genes_df %>% 
+  select(-UMAP_1, -UMAP_2) %>% 
+  pivot_longer(cols = 2:ncol(.), 
+               names_to = "gene")
+
+plot_gene_str <- function(gene_str) {
+  plot_df <- genes_df %>%
+    arrange(get(gene_str))
+  plot_df %>%
+    ggplot() +
+    aes(UMAP_1, UMAP_2, color = get(gene_str)) +
+    geom_scattermore(pointsize = 2.5, pixels = c(1024, 1024)) +
+    annotate(
+      "text",
+      x = min(plot_df$UMAP_1),
+      y = max(plot_df$UMAP_2),
+      label = bquote( ~ italic(.(gene_str))),
+      size = TEXT_SIZE * GGPLOT_TEXT_SCALE_FACTOR,
+      hjust = 0
+    ) +
+    coord_fixed() +
+    scale_color_gradient(low = "grey80",
+                         high = "blue", 
+                         labels = NULL,
+                         breaks = 0) + #breaks = c(0, 4)
+    labs(color = "Expr.")
+}
+
+p_umaps_genes <- genes_of_interest %>%
+  map(
+    ~ plot_gene_str(..1) +
+      umap_theme() +
+      labs(x = NULL, y = NULL) +
+      theme(plot.title = element_blank(),
+            plot.margin = margin())
+  )
+```
+
+```{r plot_fig3d, fig.height = 4, fig.width = 4*1.618}
+plot_fig3d <- function(shift_plot.title = -2, 
+                       shift_axis.title.x = 4, 
+                       shift_axis.title.y = -3) {
+  plot_grid_shared_legend(plotlist = p_umaps_genes, 
+                          legend.position = "right", 
+                          rel_widths = c(12, 1), 
+                          align = "hv", axis = "tblr") + 
+    theme(plot.margin = margin(), 
+          plot.title = element_text(vjust = shift_plot.title),
+          axis.title.x = element_text(vjust = shift_axis.title.x), 
+          axis.title.y = element_text(vjust = shift_axis.title.y))
+}
+plot_fig3d(shift_plot.title = 0, 
+           shift_axis.title.x = 0.5, 
+           shift_axis.title.y = 0)
+```
+
+# Figure 3e
+
+```{r p_galaxy_list}
+p_list <- metadata %>%
+  named_group_split(genotype) %>%
+  imap(~make_galaxy_plot(..1, sample_n = 0) + 
+         theme(panel.background = element_rect(fill = "black"), 
+               axis.line = element_blank()) +
+         scale_fill_viridis(option = "magma", discrete = FALSE,
+                            limits = c(0, 0.026),
+                            na.value = "white") +
+         coord_cartesian(
+           expand = FALSE, 
+           xlim = c(min(metadata[["UMAP_1"]]), 
+                    max(metadata[["UMAP_1"]])), 
+           ylim = c(min(metadata[["UMAP_2"]]), 
+                    max(metadata[["UMAP_2"]]))
+         ) + 
+         labs(x = "UMAP dim. 1", y = "UMAP dim. 2") + 
+         annotate("text", 
+                  size = TEXT_SIZE*GGPLOT_TEXT_SCALE_FACTOR, 
+                  x = min(metadata$UMAP_1) + 0.3, 
+                  y = min(metadata$UMAP_2) + 0.3, 
+                  hjust = 0, vjust = 0, 
+                  color = "white", label = case_when(
+                    ..2 == "D" ~ "EnhDel", 
+                    ..2 == "K" ~ "PD-1 KO", 
+                    ..2 == "W" ~ "WT"
+                  ))
+  )
+p_galaxy_list <- map(
+  p_list, 
+  ~..1 + 
+    umap_theme() 
+)
+```
+
+```{r plot_fig3e, fig.height = 4, fig.width = 4*1.618}
+plot_fig3e <- function(shift_axis.title.x = 4, 
+                       shift_axis.title.y = -3) {
+  p_galaxy_list[[2]] <- p_galaxy_list[[2]] + xlab("") + ylab("")
+  p_galaxy_list[[3]] <- p_galaxy_list[[3]] + xlab("") + ylab("")
+  p_galaxy_list %>% 
+    map(~..1 + 
+          theme(aspect.ratio = 1, 
+                axis.title.x = element_text(vjust = shift_axis.title.x), 
+                axis.title.y = element_text(vjust = shift_axis.title.y))) %>% 
+    plot_grid_shared_legend(legend.position = "right", ncol = 3, 
+                            rel_widths = c(9, 1)) 
+    
+}
+plot_fig3e(shift_axis.title.x = 0.5, 
+           shift_axis.title.y = 0)
+```
+
+# Figure 3f
+
+```{r calculate fisher}
+counts_df <- metadata %>% 
+  group_by(genotype, Clusters) %>% 
+  summarise(count = n())
+
+genotype_comparison <- list(D_W = c("D", "W"), D_K = c("D", "K"), K_W = c("K", "W"))
+Clusters <- counts_df$Clusters %>% unique() %>% set_names()
+
+comparisons <- expand.grid(genotype_comparison, Clusters) %>% 
+  named_group_split(Var1, Var2)
+
+fisher_out <- comparisons %>% 
+  map_dfr(~{
+    fisher_df <- counts_df %>% 
+      filter(genotype %in% c(..1$Var1[[1]])) %>% 
+      mutate(is_cluster = Clusters == ..1$Var2) %>% 
+      group_by(is_cluster, genotype) %>% 
+      summarise(count = sum(count)) %>% 
+      pivot_wider(id_cols = is_cluster, names_from = genotype, values_from = count) %>% 
+      column_to_rownames("is_cluster") 
+    fisher_df %>% 
+      fisher.test() %>% 
+      broom::tidy()
+  }, .id = "comparison") %>% 
+  mutate(g1 = str_extract(comparison, "\"[:alpha:]") %>% str_sub(start = 2), 
+         g2 = str_extract(comparison, "[[:space:]]\"[:alpha:]") %>% str_sub(start = 3), 
+         Clusters = str_extract(comparison, "/.*$") %>% str_sub(start = 3)) %>% 
+  mutate(Clusters = factor(Clusters, levels = names(palette_cluster))) 
+```
+
+```{r fisher_plot_df}
+bar_heights <- c(0.55, 0.625, 0.625)
+fisher_plot_df <- fisher_out %>% 
+  filter(!(g1 == "K" & g2 == "W")) %>% 
+  mutate(p_BH = p.adjust(p.value, method = "bonferroni")) %>% 
+  filter(p_BH < 0.05) %>% 
+  arrange(Clusters) %>% 
+  mutate(g1 = factor(g1, levels = c("W", "D", "K"))) %>% 
+  mutate(g2 = factor(g2, levels = c("W", "D", "K"))) %>% 
+  mutate(x = case_when(
+    as.numeric(g1) == 1 ~ as.numeric(Clusters) - 0.33, 
+    as.numeric(g1) == 2 ~ as.numeric(Clusters), 
+    as.numeric(g1) == 3 ~ as.numeric(Clusters) + 0.33
+  )) %>% 
+  mutate(xend = case_when(
+    as.numeric(g2) == 1 ~ as.numeric(Clusters) - 0.33, 
+    as.numeric(g2) == 2 ~ as.numeric(Clusters), 
+    as.numeric(g2) == 3 ~ as.numeric(Clusters) + 0.33
+  )) %>% 
+  mutate(xcenter = case_when(
+    (as.numeric(g1) == 1 & as.numeric(g2) == 2) | (as.numeric(g1) == 2 & as.numeric(g2) == 1) ~
+      as.numeric(Clusters) - 0.167, 
+    as.numeric(g1) == 1 & as.numeric(g2) == 3 ~ as.numeric(Clusters), 
+    as.numeric(g1) == 2 & as.numeric(g2) == 3 ~ as.numeric(Clusters) + 0.167
+  )) %>% 
+  mutate(y = case_when(
+    (as.numeric(g1) == 1 & as.numeric(g2) == 2) | (as.numeric(g1) == 2 & as.numeric(g2) == 1) ~ 
+      bar_heights[1], 
+    as.numeric(g1) == 1 & as.numeric(g2) == 3 ~ bar_heights[2], 
+    as.numeric(g1) == 2 & as.numeric(g2) == 3 ~ bar_heights[3]
+  )) %>% 
+  mutate(yend = case_when(
+    (as.numeric(g1) == 1 & as.numeric(g2) == 2) | (as.numeric(g1) == 2 & as.numeric(g2) == 1) ~
+      bar_heights[1], 
+    as.numeric(g1) == 1 & as.numeric(g2) == 3 ~ bar_heights[2], 
+    as.numeric(g1) == 2 & as.numeric(g2) == 3 ~ bar_heights[3]
+  )) %>% 
+  mutate(signif_label = case_when(
+    p_BH < 0.001 ~ "***", 
+    p_BH < 0.01 ~ "**", 
+    p_BH < 0.05 ~ "*"
+  ))
+```
+
+```{r p_bar}
+prop_df <- metadata %>% 
+  calculate_proportion(Clusters, genotype) %>% 
+  mutate(genotype = factor(genotype, levels = c("W", "D", "K"))) %>% 
+  mutate(Clusters = factor(Clusters, levels = names(palette_cluster))) 
+
+p_bar <- prop_df %>% 
+  mutate(genotype = factor(genotype_key[genotype], levels = genotype_key)) %>% 
+  ggplot() + 
+  aes(Clusters, norm_prop, fill = genotype) + 
+  geom_col(position = "dodge", width = 0.7, color = "black") + 
+  scale_fill_manual(values = palette_genotype_named) + 
+  geom_hline(yintercept = 0.33, linetype = "dashed") + 
+  labs(y = "Normalized proportion") + 
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = c(0, 0.7)) +
+  theme(axis.title.x = element_blank(), 
+        axis.line.x = element_blank(), 
+        axis.ticks.x = element_blank()) + 
+  annotate("segment", 
+           x = fisher_plot_df$x, xend = fisher_plot_df$xend, 
+           y = fisher_plot_df$y, yend = fisher_plot_df$yend) + 
+  annotate("text", size = PLOT_TITLE_SIZE*GGPLOT_TEXT_SCALE_FACTOR, 
+           x = fisher_plot_df$xcenter, y = fisher_plot_df$y + 0.01, 
+           label = fisher_plot_df$signif_label) + 
+  theme(legend.spacing = unit(0, "pt"), 
+        axis.text.x = element_text(vjust = 1), 
+        legend.title = element_blank(),
+        legend.box.spacing = margin(0.5))
+```
+
+```{r plot_fig3f}
+plot_fig3f <- function() {
+  p_bar
+}
+plot_fig3f()
+```
+
+# Figure 3i
+
+```{r pretty_name_key}
+pretty_name_key <- c(
+  "D1_CN" = "Enhdel term. rep 1", 
+  "D1_S" = "Enhdel prog. rep 1", 
+  "DK34_CN" = "Enhdel term. rep 2", 
+  "DK34_S" = "Enhdel prog. rep 2", 
+  "K3_CN" = "PD-1 KO term. rep 1", 
+  "K3_S" = "PD-1 KO prog. rep 1", 
+  "K4_CN" = "PD-1 KO term. rep 2", 
+  "K4_S" = "PD-1 KO prog. rep 2", 
+  "W1_CN" = "WT term. rep 1", 
+  "W1_S" = "WT prog. rep 1", 
+  "W2_CN" = "WT term. rep 2", 
+  "W2_S" = "WT prog. rep 2"
+)
+```
+
+```{r h_atac_cor}
+spearman_cor_df <- norm_counts_df %>% 
+  cor(method = "spearman")
+colnames(spearman_cor_df) <- pretty_name_key[colnames(spearman_cor_df)]
+rownames(spearman_cor_df) <- pretty_name_key[rownames(spearman_cor_df)]
+
+h_atac_cor <- Heatmap(
+  spearman_cor_df,
+  name = "spearman cor.",
+  # col = colorRamp2(breaks = c(0.8, 0.9, 1),
+  #                  colors = c("black" , "cornflowerblue", "grey80")), 
+  # col = colorRamp2(breaks = c(0.8, 1), 
+  #                  colors = c("white", "darkblue")), 
+  col = c(magma(100), "#FFFFFFFF"), 
+  row_names_gp = gpar(fontsize = unit(TEXT_SIZE, "pt")), 
+  column_names_gp = gpar(fontsize = unit(TEXT_SIZE, "pt")),
+  heatmap_legend_param = list(
+      title = "spearman corr.", 
+      title_gp = gpar(fontsize = unit(TEXT_SIZE, "pt")), 
+      labels_gp = gpar(fontsize = unit(TEXT_SIZE, "pt")),
+      # title_position = "lefttop",
+      # legend_direction = "horizontal",
+      grid_width = LEGEND_SIZE
+  )
+)
+```
+
+```{r plot_fig3i, fig.width = 4, fig.height = 3}
+plot_fig3i <- function() {
+  grid.grabExpr(
+    print(draw(h_atac_cor, heatmap_legend_side = "right"))
+  )
+}
+ggdraw(plot_fig3i())
+```
+
+# Figure 3j
+
+```{r p_pie}
+p_pie <- results_tidy %>%
+  mutate(is_sig = p_BH < 0.05) %>%
+  mutate(direction = ifelse(log2FoldChange > 0, "up", "down")) %>%
+  group_by(comparison, is_sig, direction) %>%
+  count() %>%
+  unite(sig_direction, is_sig, direction) %>%
+  ungroup() %>%
+  separate(
+    comparison,
+    into = c("comp", "cluster"),
+    sep = "_",
+    remove = FALSE
+  ) %>%
+  arrange(cluster) %>%
+  ggplot() +
+  aes(x = "", y = n, fill = sig_direction) +
+  geom_col(color = "black") +
+  coord_polar(theta = "y") +
+  facet_grid(cluster ~ comp) +
+  scale_fill_manual(values = c("grey", "grey", TRUE_up = "red", TRUE_down = "blue")) +
+  theme(
+    strip.background = element_blank(),
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank(),
+    legend.position = "none"
+  )
+```
+
+```{r plot_fig3j p_pie}
+plot_fig3j <- function() {
+  p_pie
+}
+plot_fig3j()
+```
+
+# Figure 3 Panel Layout
+
+\newpage
+
+Genetic perturbation of PD-1 expression does not alter formation of exhausted CD8+ T cell subsets. 
+
+```{r Figure 3, fig.height = 10, fig.width = 7.5}
+theme_set(figure_layout_theme())
+
+r1_height <- 0.25
+r1_bot_align <- 0.85 - r1_height
+r2_height <- 0.15
+r2_bot_align <- r1_bot_align - r2_height
+r3_height <- 0.3
+r3_bot_align <- 0.3 - r3_height
+
+figure_labels <- c("a", "b", "c", "d", "e", "f", "g", "h", "i", "j")
+figure_label_x <- c(0, 0.5, 0, 0.4, 0, 0.6, 0, 0.5, 0, 0.45)
+figure_label_y <- c(1, 1, r1_height + r1_bot_align, r1_height + r1_bot_align, 
+                    r2_height + r2_bot_align, r2_height + r2_bot_align, 
+                    r2_bot_align, r2_bot_align, 
+                    r3_height + r3_bot_align, r3_height + r3_bot_align)
+
+ggdraw() + 
+  draw_plot(plot_grid(plot_fig3c(), plot_fig3d(), 
+                  ncol = 2, rel_widths = c(0.4, 0.6), align = "h"),
+            0, r1_bot_align, 1, r1_height) +
+  draw_plot(plot_fig3e(), 0, r2_bot_align, 0.6, r2_height) + 
+  draw_plot(plot_fig3f(), 0.6, r2_bot_align + 0.015, 0.4, r2_height - 0.015) + 
+  draw_plot(plot_fig3i(), 0, r3_bot_align, 0.47, r3_height) + 
+  draw_plot(plot_fig3j(), 0.47, r3_bot_align, 0.53, r3_height*0.8) + 
+  draw_plot_label(label = figure_labels, 
+                  size = PLOT_TITLE_SIZE, 
+                  x = figure_label_x, 
+                  y = figure_label_y)
+```
+
+\newpage
+
+```{r sessionInfo}
+sessionInfo()
+```
