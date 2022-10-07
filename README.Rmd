@@ -56,6 +56,7 @@ Alternatively, to bypass the long compute time in step 3, follow the instruction
 * scRNAseq/data/processed_data_tables.zip -> decompress
 * scRNAseq/data/processed_data_objects/00_seurat_workflow.so.rds
 * scRNAseq/data/processed_data_objects/05_pseudobulk.deseq_list.rds
+* ATACseq/data/processed_data_tables/01_analyze.deseq_results_tidy.tsv
 
 ## Contact 
 

@@ -75,6 +75,7 @@ the `.Rmd` files in the `figures/` directory.
   - scRNAseq/data/processed\_data\_tables.zip -\> decompress
   - scRNAseq/data/processed\_data\_objects/00\_seurat\_workflow.so.rds
   - scRNAseq/data/processed\_data\_objects/05\_pseudobulk.deseq\_list.rds
+  - ATACseq/data/processed\_data\_tables/01\_analyze.deseq\_results\_tidy.tsv
 
 ## Contact
 
