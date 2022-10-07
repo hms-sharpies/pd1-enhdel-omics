@@ -27,6 +27,16 @@ library(SeuratObject)
 
 # helper functions -----
 
+set_idents <- function(so, ident) {
+  Idents(so) <- ident
+  return(so)
+}
+
+set_assay <- function(so, assay) {
+  DefaultAssay(so) <- assay
+  return(so)
+}
+
 # named_group_split
 # credit goes to romainfrancois on https://github.com/tidyverse/dplyr/issues/4223
 named_group_split <- function(.tbl, ...) {
