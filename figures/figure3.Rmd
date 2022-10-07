@@ -10,8 +10,6 @@ header-includes:
 - \usepackage{setspace}\singlespacing
 output:
   pdf_document: default
-  html_document:
-    df_print: paged
 ---
 
 ```{r setup, include=FALSE}

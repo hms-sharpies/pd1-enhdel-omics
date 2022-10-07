@@ -298,6 +298,35 @@ get_leading_edge_df <- function(rank_vec, gs_vec) {
            is_leading_edge)
 }
 
+make_galaxy_plot <- function(metadata_df,
+                             sample_n = 800,
+                             umap1 = "UMAP_1", umap2 = "UMAP_2") {
+  if (sample_n != 0)
+    data_sampled <- slice_sample(metadata_df, n = sample_n)
+  retplot <- ggplot(metadata_df) +
+    aes_string(umap1, umap2) +
+    stat_density_2d(aes(fill = ..density..), geom = 'raster', contour = FALSE) +
+    scale_fill_viridis(option = "magma") +
+    coord_cartesian(expand = FALSE, xlim = c(min(metadata_df[[umap1]]), max(metadata_df[[umap1]])),
+                    ylim = c(min(metadata_df[[umap2]]), max(metadata_df[[umap2]])))
+  if (sample_n != 0)
+    retplot <- retplot + geom_point(shape = '.', col = 'white', data = data_sampled)
+  return(retplot)
+}
+
+
+calculate_proportion <- function(.data, var, norm_var) {
+  var <- enquo(var)
+  norm_var <- enquo(norm_var)
+  .data %>%
+    group_by(!!var, !!norm_var) %>%
+    summarise(count = n()) %>%
+    group_by(!!norm_var) %>%
+    mutate(total = sum(count), prop = count / total) %>%
+    group_by(!!var) %>%
+    mutate(total_prop = sum(prop), norm_prop = prop / total_prop)
+}
+
 
 # pseudobulk functions ------
 
