@@ -5,6 +5,7 @@ scRNAseq/data/gene_signatures/02_gene_signatures.msigdbr_H-C2-C7.tsv
 scRNAseq/data/processed_data_objects/*
 scRNAseq/data/processed_data_tables.zip
 scRNAseq/data/single_cell_portal/*
+ATACseq/data/processed_data_tables/01_analyze.deseq_results_tidy.tsv
 
 # Created by https://www.toptal.com/developers/gitignore/api/macos,r,vim,git
 # Edit at https://www.toptal.com/developers/gitignore?templates=macos,r,vim,git
