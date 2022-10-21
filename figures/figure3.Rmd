@@ -359,6 +359,21 @@ ggdraw(plot_fig3i())
 
 # Figure 3j
 
+```{r}
+results_tidy %>%
+  mutate(is_sig = p_BH < 0.05) %>%
+  mutate(direction = ifelse(log2FoldChange > 0, "up", "down")) %>%
+  group_by(comparison, is_sig, direction) %>%
+  count() %>% 
+  group_by(comparison) %>% 
+  mutate(total = sum(n), prop = n / total, pct = format(prop * 100, digits = 4) %>% paste0("%")) %>% 
+  filter(is_sig) %>% 
+  pivot_wider(id_cols = comparison, 
+              names_from = direction, 
+              values_from = pct)
+```
+
+
 ```{r p_pie}
 p_pie <- results_tidy %>%
   mutate(is_sig = p_BH < 0.05) %>%
