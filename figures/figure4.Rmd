@@ -112,7 +112,7 @@ mean_scaled_norm_counts_mtx <- mean_scaled_norm_counts %>%
 
 ```{r h_list}
 h_list <- list()
-col_fun <- colorRamp2(breaks = c(0.8, 1.4), colors = c("white", "darkgreen"))
+col_fun <- colorRamp2(breaks = c(0.8, 1.0, 1.2), colors = c("white", "darkgreen", "darkgreen"))
 for (cluster_str in names(palette_cluster)) {
   if (cluster_str == "dividing")
     next
@@ -140,9 +140,10 @@ for (cluster_str in names(palette_cluster)) {
   
   h_list[[cluster_str]] <- Heatmap(
     h_mtx, 
+    width = unit(TEXT_SIZE*9, "pt"), 
     column_title = cluster_abbr_key[cluster_str], 
     column_title_gp = gpar(fontsize = TEXT_SIZE), 
-    col = col_fun, 
+    col = col_fun,
     name = "mean scaled norm counts", 
     cluster_rows = FALSE, 
     cluster_columns = FALSE, 
@@ -168,18 +169,24 @@ loading_arrow <- ggplot() +
 
 ```{r plot_fig4b, fig.width = 7}
 plot_fig4b <- function() {
-  h_list_draw <- h_list %>% 
-    map(~..1 %>% 
-          draw(show_heatmap_legend = FALSE) %>% 
-          grid.grabExpr()) %>% 
+  h_list_draw <- h_list %>%
+    map( ~ ..1 %>%
+           draw(show_heatmap_legend = FALSE) %>%
+           grid.grabExpr()) %>%
     plot_grid(plotlist = ., ncol = 4)
-  lgd <- Legend(col_fun = col_fun, title = "expr.", 
-                grid_width = LEGEND_SIZE,
-                title_gp = gpar(fontsize = TEXT_SIZE, fontface = "bold"), 
-                labels_gp = gpar(fontsize = TEXT_SIZE)) %>% 
+  lgd <- Legend(
+    col_fun = col_fun,
+    title = "expr.",
+    grid_width = LEGEND_SIZE,
+    title_gp = gpar(fontsize = TEXT_SIZE, fontface = "bold"),
+    labels_gp = gpar(fontsize = TEXT_SIZE)
+  ) %>%
     draw() %>% grid.grabExpr()
-  plot_grid(loading_arrow, h_list_draw, lgd, 
-            ncol = 3, rel_widths = c(1, 8, 1))
+  plot_grid(loading_arrow,
+            h_list_draw,
+            lgd,
+            ncol = 3,
+            rel_widths = c(1, 8, 1))
 }
 plot_fig4b()
 ```

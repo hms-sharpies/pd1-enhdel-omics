@@ -87,7 +87,7 @@ mean_scaled_norm_counts_mtx <- mean_scaled_norm_counts %>%
 ```{r h_list}
 h_list <- list()
 
-col_fun <- colorRamp2(breaks = c(0.8, 1.4), colors = c("white", "darkblue"))
+col_fun <- colorRamp2(breaks = c(0.8, 1, 1.2), colors = c("white", "darkblue", "darkblue"))
 for (cluster_str in names(palette_cluster)) {
   if (cluster_str == "dividing")
     next
@@ -115,6 +115,7 @@ for (cluster_str in names(palette_cluster)) {
   
   h_list[[cluster_str]] <- Heatmap(
     h_mtx, 
+    width = unit(TEXT_SIZE*9, "pt"), 
     column_title = cluster_abbr_key[cluster_str], 
     column_title_gp = gpar(fontsize = TEXT_SIZE), 
     col = col_fun, 
