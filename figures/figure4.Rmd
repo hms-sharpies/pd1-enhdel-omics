@@ -305,7 +305,7 @@ plot_fig4d(rasterize = FALSE)
 
 # Figure 4e and 4f
 
-```{r rank_vec_list}
+```{r}
 rank_vec_list <- dge_df %>% 
   mutate(Clusters = factor(Clusters, levels = names(palette_cluster))) %>% 
   arrange(Clusters) %>% 
@@ -313,7 +313,9 @@ rank_vec_list <- dge_df %>%
   filter(contrast != "K_W") %>% 
   named_group_split(contrast, Clusters) %>% 
   map(~{set_names(.$avg_logFC, .$gene)})
+```
 
+```{r rank_vec_list}
 oxphos_genes <- gene_sig_df %>% 
   filter(gs_name == "HALLMARK_OXIDATIVE_PHOSPHORYLATION") %>% 
   .$gene_symbol
@@ -359,7 +361,8 @@ plot_fig4e <- function(rel_plot_size = 2,
                        rel_heights = c(1, 9), 
                        rel_widths = c(1, 12)) {
   p <- plot_gsea_curve_grid(effexh_leg_list, effexh_df, 
-                            rel_plot_size = rel_plot_size)
+                            rel_plot_size = rel_plot_size, 
+                            annotate_coords = c(0.5, 0.8))
   plot_grid(
     NULL, cluster_ann + 
       annotate("text", x = 0.5, y = 1, label = "Effector vs exhausted", size = PLOT_TITLE_SIZE*GGPLOT_TEXT_SCALE_FACTOR, hjust = 0) + 
@@ -377,7 +380,8 @@ plot_fig4f <- function(rel_plot_size = 2,
                        rel_heights = c(1, 9), 
                        rel_widths = c(1, 12)) {
   p <- plot_gsea_curve_grid(oxphos_leg_list, oxphos_df, 
-                            rel_plot_size = rel_plot_size)
+                            rel_plot_size = rel_plot_size, 
+                            annotate_coords = c(0.55, 0.8))
   plot_grid(
     NULL, cluster_ann + 
       annotate("text", x = 0.5, y = 1, label = "Oxidative phosphorylation", size = PLOT_TITLE_SIZE*GGPLOT_TEXT_SCALE_FACTOR, hjust = 0) + 

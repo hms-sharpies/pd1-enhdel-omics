@@ -177,22 +177,19 @@ plot_gene_by_cluster <- function(plot_df, gene_sym) {
     mutate(Clusters_short = cluster_abbr_key[cluster]) %>% 
     mutate(Clusters_short = factor(Clusters_short, levels = cluster_abbr_key)) %>% 
     filter(gene == rlang::as_name(gene_sym) & p_val_adj < 0.05) %>% 
-    mutate(y = max(plot_df[[rlang::as_name(gene_sym)]]) + 0.05) %>% 
-    mutate(sig = case_when(
-      p_val_adj < 0.001 ~ "***", 
-      p_val_adj < 0.01 ~ "**", 
-      p_val_adj < 0.05 ~ "*"
-    )) 
+    mutate(y = max(plot_df[[rlang::as_name(gene_sym)]]) + 0.05)
 
   plot_df %>% 
     ggplot() + 
     aes(Clusters_short, !!gene_sym) + 
     geom_violin(aes(fill = Clusters_short), scale = "width", 
                 size = LINE_WIDTH) + 
+    stat_compare_means(comparisons = unique(plot_df$Clusters_short)[2:5] %>% 
+                                            as.character() %>% 
+                                            map(~c(..1, "term.")), 
+                       label = "p.signif") + 
     scale_fill_manual(values = palette_cluster_abbr) + 
     labs(y = "Expression Level") + 
-    geom_text(aes(x = Clusters_short, y = y, label = sig), 
-              data = ann_df) + 
     theme(legend.position = "none", 
           axis.title.x = element_blank()) + 
     ggtitle(bquote(~italic(.(rlang::as_name(gene_sym))))) 
@@ -340,7 +337,8 @@ plot_supp4d <- function(rel_plot_size = 2,
                        rel_widths = c(1, 12)) {
   p <- plot_gsea_curve_grid(apoptosis_leg_list, apoptosis_df, 
                             rel_plot_size = rel_plot_size, 
-                            annotate_coords = c(x = 0.3, y = 0.2))
+                            annotate_coords = c(x = 0.025, y = 0.1), 
+                            text_size = 5*GGPLOT_TEXT_SCALE_FACTOR)
   plot_grid(
     NULL, cluster_ann + 
       annotate("text", x = 0.5, y = 1, label = "HAMAI_APOPTOSIS_VIA_TRAIL_UP", size = PLOT_TITLE_SIZE*GGPLOT_TEXT_SCALE_FACTOR, hjust = 0) + 
@@ -359,7 +357,7 @@ plot_supp4e <- function(rel_plot_size = 2,
                        rel_widths = c(1, 12)) {
   p <- plot_gsea_curve_grid(treg_leg_list, treg_df, 
                             rel_plot_size = rel_plot_size, 
-                            annotate_coords = c(x = 0.3, y = 0.2))
+                            annotate_coords = c(x = 0.025, y = 0.2))
   plot_grid(
     NULL, cluster_ann + 
       annotate("text", x = 0.5, y = 1, label = "TREG_VS_TEFF_UP", size = PLOT_TITLE_SIZE*GGPLOT_TEXT_SCALE_FACTOR, hjust = 0) + 

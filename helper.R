@@ -156,7 +156,7 @@ plot_gsea_ticks <- function(leg_df,
 plot_gsea_curve_pretty <- function(leg_df,
                                    group_var,
                                    palette = NA,
-                                   rel_heights = c(3, 1),
+                                   rel_heights = c(4, 1),
                                    show.legend = TRUE,
                                    pt_size = 3,
                                    text_size = 1,
@@ -178,13 +178,13 @@ plot_gsea_curve_pretty <- function(leg_df,
     group_var = !!group_var,
     pt_size = pt_size,
     line_size = line_size
-  )
+  ) + theme(plot.margin = margin(r = 5, l = 5))
   p_leg_ticks <- plot_gsea_ticks(
     leg_df,
     group_var = !!group_var,
     pt_size = tick_size,
     pt_stroke = tick_stroke
-  )
+  ) + theme(plot.margin = margin(r = 5, l = 5))
 
   if (!is.na(palette_cluster)) {
     p_leg <- p_leg +
@@ -207,19 +207,19 @@ plot_gsea_curve_pretty <- function(leg_df,
     p_leg <- p_leg +
       geom_text(
         aes(
-          x = annotate_coords[[1]] * max(leg_df$rank),
-          y = min(leg_df$running_es) + annotate_coords[[2]] *
-            diff(range(leg_df$running_es)),
+          x = max(leg_df$rank)*annotate_coords[[1]],
+          y = min(leg_df$running_es) + annotate_coords[[2]]*diff(range(leg_df$running_es)),
           label = paste0(
             "FDR=",
-            format(q.val, digits = 2),
+            format(q.val, digits = 2, scientific = TRUE),
             "\n",
             "sscore=",
             format(sscore, digits = 2)
           )
         ),
         data = annotate_df,
-        size = text_size
+        size = text_size,
+        hjust = 0
       )
   }
 
@@ -236,7 +236,8 @@ plot_gsea_curve_pretty <- function(leg_df,
 plot_gsea_curve_grid <- function(leg_list,
                                  gsea_df,
                                  rel_plot_size = 2,
-                                 annotate_coords = c(0.7, 0.8)) {
+                                 annotate_coords = c(0.05, 0.8),
+                                 text_size = TEXT_SIZE * GGPLOT_TEXT_SCALE_FACTOR) {
   leg_list %>%
     imap( ~ {
       contrast_str <- str_extract(..2, ".* / ") %>% str_sub(end = -4)
@@ -255,7 +256,7 @@ plot_gsea_curve_grid <- function(leg_list,
         annotate_coords = annotate_coords,
         annotate_df_filters = list(Clusters = cluster_str,
                                    contrast = contrast_str),
-        text_size = TEXT_SIZE * GGPLOT_TEXT_SCALE_FACTOR
+        text_size = text_size
       )
     }) %>%
     plot_grid(plotlist = ., ncol = 4)
