@@ -52,7 +52,52 @@ gsea_res_one.v.all_ordered.log2FC <- map_dfr(
 )
 gsea_res_one.v.all_ordered.log2FC_tbl <- gsea_res_one.v.all_ordered.log2FC %>%
   separate(cluster_contrast, into = c("Clusters", "contrast"), sep = " / ")
+
 write_tsv(
   gsea_res_one.v.all_ordered.log2FC_tbl,
   here("scRNAseq", "data", "processed_data_tables", "03_gsea.genotype_one-v-one_per-cluster_log2FC.tsv")
 )
+
+# rerun with more permutations for just oxphos and eff exh ------
+
+# gsea_specific_df <- rank_lists_one.v.all_ordered.log2FC %>%
+#   map_dfr(
+#     ~ liger::bulk.gsea(
+#       ..1,
+#       set.list = gs_list[c("HALLMARK_OXIDATIVE_PHOSPHORYLATION",
+#                            "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP")],
+#       n.rand = 1e6,
+#       power = 0
+#     ) %>% as_tibble(rownames = "gs_name"),
+#     .id = "Clusters_contrast"
+#   )
+#
+# gsea_specific_df <- gsea_specific_df %>%
+#   separate(Clusters_contrast, into = c("Clusters", "contrast"), sep = " / ")
+#
+# write_tsv(
+#   gsea_specific_df,
+#   here("scRNAseq", "data", "processed_data_tables", "03_gsea.genotype_one-v-one_per-cluster_log2FC_specific.tsv")
+# )
+
+# also with Treg and Apoptosis --------
+
+# gsea_specific2_df <- rank_lists_one.v.all_ordered.log2FC %>%
+#   map_dfr(
+#     ~ liger::bulk.gsea(
+#       ..1,
+#       set.list = gs_list[c("HAMAI_APOPTOSIS_VIA_TRAIL_UP",
+#                            "GSE14350_TREG_VS_TEFF_UP")],
+#       n.rand = 1e6,
+#       power = 0
+#     ) %>% as_tibble(rownames = "gs_name"),
+#     .id = "Clusters_contrast"
+#   )
+#
+# gsea_specific2_df <- gsea_specific2_df %>%
+#   separate(Clusters_contrast, into = c("Clusters", "contrast"), sep = " / ")
+#
+# write_tsv(
+#   gsea_specific2_df,
+#   here("scRNAseq", "data", "processed_data_tables", "03_gsea.genotype_one-v-one_per-cluster_log2FC_specific2.tsv")
+# )
