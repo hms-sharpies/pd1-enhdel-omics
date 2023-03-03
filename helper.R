@@ -528,3 +528,138 @@ scp_export_metadata_file <- function(so,
   message("done!")
 
 }
+
+# Seurat helper functions -------
+
+
+#' @name get_metadata_from_so
+#'
+#' @param so Seurat object
+#' @param assay
+#' @param slot
+#' @param genes a character vector of genes or NULL
+#' @param metadata a character vector of columns from metadata, "all", or NULL
+#' @param reduction a string specifying the reduction.
+#'
+#' @return data table
+
+get_metadata_from_so <- function(so,
+                                 assay = "RNA",
+                                 genes = NULL,
+                                 metadata = "all",
+                                 reduction = "umap") {
+  if (is.null(metadata)) {
+    out_df <- so@meta.data %>%
+      as_tibble(rownames = "cell") %>%
+      dplyr::select(cell)
+  } else if (length(metadata) > 1) {
+    out_df <- so@meta.data %>%
+      as_tibble(rownames = "cell") %>%
+      dplyr::select(cell, all_of(metadata))
+  } else if (metadata == "all") {
+    out_df <- so@meta.data %>%
+      as_tibble(rownames = "cell")
+  } else {
+    out_df <- so@meta.data %>%
+      as_tibble(rownames = "cell") %>%
+      dplyr::select(cell, all_of(metadata))
+  }
+
+  if (!is.null(genes)) {
+    # get index
+    gene_i <- match(genes, rownames(so))
+
+    # check that genes exists
+    if (any(is.na(gene_i))) {
+      stop(paste0(genes[which(is.na(gene_i))], " not found in data."))
+    }
+
+    # get gene expression
+    if (length(genes) == 1) {
+      gene_df <- so@assays[[assay]]@data[genes, ] %>%
+        as_tibble(rownames = "cell")
+      gene_df[[genes]] <- gene_df$value
+      gene_df <- gene_df %>%
+        dplyr::select(-value)
+    } else {
+      gene_df <- so@assays[[assay]]@data[genes, ] %>%
+        as.matrix() %>% t() %>%
+        as_tibble(rownames = "cell")
+    }
+
+    out_df <- out_df %>% left_join(gene_df, by = "cell")
+  }
+
+  if (!is.null(reduction)) {
+    if (length(reduction) > 1) {
+      stop(paste0("reduction must be of length 1"))
+    } else if (!(reduction %in% names(so@reductions))) {
+      stop(paste0(reduction, " not found in reductions. "))
+    }
+
+    reduc_df <- so@reductions[["umap"]]@cell.embeddings %>%
+      as_tibble(rownames = "cell")
+    out_df <- out_df %>% left_join(reduc_df, by = "cell")
+  }
+
+  return(out_df)
+}
+
+
+
+#' @name plot_violin
+#'
+#' @param .tbl a data frame or tibble with x and y coordinates
+#' @param var variable to plot as symbol
+#' @param group group to plot as symbol
+#'
+#' @return ggplot object
+
+plot_violin <- function(.tbl, group, var, pt.size = 0, pt.stroke = 1) {
+  var <- enquo(var)
+  group <- enquo(group)
+  p <- .tbl %>%
+    ggplot() +
+    aes(!!group, !!var, fill = !!group) +
+    geom_violin(scale = "width") +
+    scale_y_continuous(expand = c(0, 0)) +
+    remove_x_spine() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+          legend.position = "none",
+          plot.title = element_text(hjust = 0.5))
+  if (pt.size != 0) {
+    p <- p +
+      geom_jitter(width = 0.25, size = pt.size, stroke = pt.stroke)
+  }
+  return(p)
+}
+
+
+#' @name remove_x_spine
+#'
+#' @return a ggplot theme to remove the x spines
+
+remove_x_spine <- function(...) {
+  remove.x.spine.theme <- theme(
+    axis.line.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    validate = TRUE,
+    ...
+  )
+  return(remove.x.spine.theme)
+}
+
+#' @name remove_spines
+#'
+#' @return a ggplot theme to remove the spines
+
+remove_spines <- function(...) {
+  remove.spine.theme <- theme(
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    validate = TRUE,
+    ...
+  )
+  return(remove.spine.theme)
+}
+
