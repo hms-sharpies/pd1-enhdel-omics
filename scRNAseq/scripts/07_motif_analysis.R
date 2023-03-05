@@ -12,6 +12,7 @@ library(Seurat)
 library(SeuratObject)
 library(ggrepel)
 
+source(here("helper.R"))
 theme_set(theme_classic())
 
 # purpose ------
