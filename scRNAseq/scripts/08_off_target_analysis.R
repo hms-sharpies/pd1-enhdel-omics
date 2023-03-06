@@ -62,6 +62,48 @@ zscore_mean_df %>%
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   scale_fill_viridis()
 
+# chromosome 1 ------
+
+chr1_genes_df <- genes_df %>%
+  filter(X1 == "1")
+chr1_off_target_genes <- off_target_genes[off_target_genes %in% chr1_genes_df$gene_name]
+length(chr1_off_target_genes)
+
+chr1_off_target_genes[chr1_off_target_genes %in% rownames(so@assays$RNA@counts)]
+
+gene_expr_tidy1 <- get_metadata_from_so(so, genes = off_target_genes_present) %>%
+  pivot_longer(cols = chr1_off_target_genes,
+               names_to = "gene")
+zscore_mean_df1 <- gene_expr_tidy1 %>%
+  group_by(orig.ident, gene) %>%
+  summarise(mean_value = mean(value)) %>%
+  group_by(gene) %>%
+  mutate(zscore_mean_value = as.vector(scale(mean_value))) %>%
+  ungroup()
+zscore_mean_df1 %>%
+  ggplot() +
+  aes(orig.ident, fct_reorder(gene, mean_value), fill = mean_value) +
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_fill_viridis()
+
+zscore_mean_df1 %>%
+  mutate(genotype = str_extract(orig.ident, ".")) %>%
+  group_by(genotype, gene) %>%
+  summarise(avg_mean_value = mean(mean_value)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = gene,
+              names_from = genotype,
+              values_from = avg_mean_value) %>%
+  ggplot() +
+  aes(D, W) +
+  geom_point() +
+  geom_text_repel(aes(label = gene)) +
+  stat_regline_equation() +
+  stat_smooth(method = "lm") +
+  labs(x = "Expression in EnhDel", y = "Expression in WT",
+       title = "Expression of predicted off-target genes")
+
 # permutation testing -----
 
 sample_n_genes <- function(so, n, seed = 42) {
