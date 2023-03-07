@@ -64,45 +64,58 @@ zscore_mean_df %>%
 
 # chromosome 1 ------
 
+# get genes from chromosome 1
 chr1_genes_df <- genes_df %>%
   filter(X1 == "1")
-chr1_off_target_genes <- off_target_genes[off_target_genes %in% chr1_genes_df$gene_name]
+
+all_genes_in_so <- rownames(so@assays$RNA@counts)
+length(all_genes_in_so)
+# there are 14,462 genes in the Seurat object
+
+chr1_genes_in_so <- all_genes_in_so[all_genes_in_so %in% chr1_genes_df$gene_name]
+length(chr1_genes_in_so)
+# there are 859 genes on Chr1 found
+
+chr1_off_target_genes <- off_target_genes[off_target_genes %in% chr1_genes_in_so]
 length(chr1_off_target_genes)
+# of those, 5 are off target genes
 
-chr1_off_target_genes[chr1_off_target_genes %in% rownames(so@assays$RNA@counts)]
+dge_df <- read_tsv(
+  here(
+    "scRNAseq",
+    "data",
+    "processed_data_tables",
+    "01_dge.genotype_one-v-one_per-cluster.tsv"
+  )
+) %>% filter(contrast == "D_W")
 
-gene_expr_tidy1 <- get_metadata_from_so(so, genes = off_target_genes_present) %>%
-  pivot_longer(cols = chr1_off_target_genes,
-               names_to = "gene")
-zscore_mean_df1 <- gene_expr_tidy1 %>%
-  group_by(orig.ident, gene) %>%
-  summarise(mean_value = mean(value)) %>%
-  group_by(gene) %>%
-  mutate(zscore_mean_value = as.vector(scale(mean_value))) %>%
-  ungroup()
-zscore_mean_df1 %>%
+dge_df %>%
+  filter(gene %in% chr1_genes_in_so) %>%
+  group_by(Clusters) %>%
+  mutate(signed_loglog_p = ifelse(avg_logFC > 0,
+                                    log10(-log10(p_val)),
+                                    -log10(-log10(p_val)))) %>%
+  arrange(signed_loglog_p) %>%
+  mutate(rank = row_number()) %>%
   ggplot() +
-  aes(orig.ident, fct_reorder(gene, mean_value), fill = mean_value) +
-  geom_tile() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  scale_fill_viridis()
-
-zscore_mean_df1 %>%
-  mutate(genotype = str_extract(orig.ident, ".")) %>%
-  group_by(genotype, gene) %>%
-  summarise(avg_mean_value = mean(mean_value)) %>%
-  ungroup() %>%
-  pivot_wider(id_cols = gene,
-              names_from = genotype,
-              values_from = avg_mean_value) %>%
-  ggplot() +
-  aes(D, W) +
-  geom_point() +
-  geom_text_repel(aes(label = gene)) +
-  stat_regline_equation() +
-  stat_smooth(method = "lm") +
-  labs(x = "Expression in EnhDel", y = "Expression in WT",
-       title = "Expression of predicted off-target genes")
+  aes(rank, signed_loglog_p) +
+  # geom_point(size = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  # geom_hline(yintercept = c(log10(-log10(0.05)),-log10(-log10(0.05))),
+  #            color = "red") +
+  # geom_line() +
+  geom_point(size = 0.1, alpha = 0.5) +
+  geom_point(data = ~..1 %>% filter(gene %in% chr1_off_target_genes),
+             size = 2) +
+  geom_text_repel(aes(label = gene),
+                  data = ~..1 %>% filter(gene %in% chr1_off_target_genes)) +
+  facet_wrap(~Clusters, ncol = 5, scale = "free_y") +
+  remove_x_spine() +
+  theme(strip.background = element_blank(),
+        axis.text.x = element_blank()) +
+  labs(title = "Genes differentially expressed between EnhDel vs WT on Chr1",
+       subtitle = "Labelled genes are predicted off-target",
+       y = "(WT) <-- Directional log(-log(p-value)) --> (EnhDel)")
 
 # permutation testing -----
 
