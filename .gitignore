@@ -1,3 +1,6 @@
+# temp files from pptx
+~$*
+
 # data tables and objects too large for GitHub
 scRNAseq/data/counts_matrices.zip
 scRNAseq/data/counts_matrices/*
