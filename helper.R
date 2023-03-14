@@ -536,7 +536,7 @@ scp_export_metadata_file <- function(so,
 #'
 #' @param so Seurat object
 #' @param assay
-#' @param slot
+#' @param slot one of "counts", "data", or "scale.data"
 #' @param genes a character vector of genes or NULL
 #' @param metadata a character vector of columns from metadata, "all", or NULL
 #' @param reduction a string specifying the reduction.
@@ -546,6 +546,7 @@ scp_export_metadata_file <- function(so,
 get_metadata_from_so <- function(so,
                                  assay = "RNA",
                                  genes = NULL,
+                                 slot = "data",
                                  metadata = "all",
                                  reduction = "umap") {
   if (is.null(metadata)) {
@@ -576,15 +577,30 @@ get_metadata_from_so <- function(so,
 
     # get gene expression
     if (length(genes) == 1) {
-      gene_df <- so@assays[[assay]]@data[genes, ] %>%
-        as_tibble(rownames = "cell")
+      if (slot == "data") {
+        gene_df <- so@assays[[assay]]@data[genes, ] %>%
+          as_tibble(rownames = "cell")
+      } else if (slot == "scale.data") {
+        gene_df <- so@assays[[assay]]@scale.data[genes, ] %>%
+          as_tibble(rownames = "cell")
+      } else {
+        stop("Oops, haven't implemented that slot yet. Try again. ")
+      }
       gene_df[[genes]] <- gene_df$value
       gene_df <- gene_df %>%
         dplyr::select(-value)
     } else {
-      gene_df <- so@assays[[assay]]@data[genes, ] %>%
-        as.matrix() %>% t() %>%
-        as_tibble(rownames = "cell")
+      if (slot == "data") {
+        gene_df <- so@assays[[assay]]@data[genes, ] %>%
+          as.matrix() %>% t() %>%
+          as_tibble(rownames = "cell")
+      } else if (slot == "scale.data") {
+        gene_df <- so@assays[[assay]]@scale.data[genes, ] %>%
+          as.matrix() %>% t() %>%
+          as_tibble(rownames = "cell")
+      } else {
+        stop("Oops, haven't implemented that slot yet. Try again. ")
+      }
     }
 
     out_df <- out_df %>% left_join(gene_df, by = "cell")
