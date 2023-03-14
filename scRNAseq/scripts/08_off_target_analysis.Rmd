@@ -1,0 +1,203 @@
+---
+title: "Off target effects"
+author: "Amy Huang"
+date: "2023-03-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      fig.width = 7)
+
+library(here)
+library(forcats)
+source(here("helper.R"))
+source(here("aesthetics.R"))
+theme_set(theme_classic())
+```
+
+# Purpose 
+
+To answer the question, "What are the off-target effects of the CRISPR editing?"
+
+# Set up
+
+To start, read in the Seurat object. 
+
+```{r}
+so <-
+  readRDS(here(
+    "scRNAseq",
+    "data",
+    "processed_data_objects",
+    "00_seurat_workflow.so.rds"
+  ))
+```
+
+And the table of off-target genes predicted by the Mudra analysis. 
+
+```{r}
+off_target_genes <-
+  read_tsv(here("scRNAseq", "data", "off_target_CFD_0.3.txt"),
+           col_names = FALSE)$X1
+off_target_genes
+```
+
+Of the `r length(off_target_genes)`, there are `r length(off_target_genes[off_target_genes %in% rownames(so@assays$RNA@counts)])` genes that are present in the Seurat object.
+<!-- 70 genes,  37 genes present -->
+
+```{r}
+off_target_genes_present <- off_target_genes[off_target_genes %in% rownames(so@assays$RNA@counts)]
+off_target_genes_present
+```
+
+```{r}
+gene_expr_tidy <- get_metadata_from_so(so, genes = off_target_genes_present) %>%
+  pivot_longer(cols = off_target_genes_present,
+               names_to = "gene")
+zscore_mean_df <- gene_expr_tidy %>%
+  group_by(orig.ident, gene) %>%
+  summarise(mean_value = mean(value)) %>%
+  group_by(gene) %>%
+  mutate(zscore_mean_value = as.vector(scale(mean_value))) %>%
+  ungroup()
+```
+
+```{r, fig.width = 7}
+h_tbl <- get_metadata_from_so(so, genes = off_target_genes_present, 
+                     metadata = c("genotype", "orig.ident", "cluster_ids"), 
+                     slot = "scale.data") %>% 
+  arrange(genotype, cluster_ids)
+h_df <- h_tbl %>% 
+  dplyr::select(cell, genotype, cluster_ids) %>% 
+  column_to_rownames("cell")
+row_ann <- rowAnnotation(
+  df = h_df, 
+  col = list(
+    genotype = palette_genotype, 
+    cluster_ids = palette_cluster_ids
+  )
+)
+h_mtx <- h_tbl %>% 
+  dplyr::select(cell, all_of(off_target_genes_present)) %>% 
+  column_to_rownames("cell") %>% 
+  as.matrix()
+Heatmap(h_mtx, 
+        name = "scaled\nlognorm expr.", 
+        # col = magma(25), 
+        show_row_names = FALSE, 
+        cluster_rows = FALSE, 
+        left_annotation = row_ann)
+```
+
+
+# Chr 1
+
+```{r}
+genes_df <- read_tsv(here("scRNAseq", "data", "genes.gtf"), skip = 5, col_names = FALSE) %>%
+  filter(X3 == "gene") %>%
+  separate(X9, into = c("gene_id", "gene_version", "gene_name", "gene_source", "gene_biotype"),
+           sep = "; ") %>%
+  mutate(gene_name = str_sub(gene_name, start = 12, end = -2)) %>%
+  dplyr::relocate(gene_name, .before = X1)
+```
+
+```{r}
+# get genes from chromosome 1
+chr1_genes_df <- genes_df %>%
+  filter(X1 == "1")
+
+all_genes_in_so <- rownames(so@assays$RNA@counts)
+length(all_genes_in_so)
+# there are 14,462 genes in the Seurat object
+
+chr1_genes_in_so <- all_genes_in_so[all_genes_in_so %in% chr1_genes_df$gene_name]
+length(chr1_genes_in_so)
+# there are 859 genes on Chr1 found
+
+chr1_off_target_genes <- off_target_genes[off_target_genes %in% chr1_genes_in_so]
+length(chr1_off_target_genes)
+# of those, 5 are off target genes
+```
+
+```{r}
+dge_df <- read_tsv(
+  here(
+    "scRNAseq",
+    "data",
+    "processed_data_tables",
+    "01_dge.genotype_one-v-one_per-cluster.tsv"
+  )
+) %>% filter(contrast == "D_W")
+```
+
+
+```{r}
+dge_df %>%
+  filter(gene %in% chr1_genes_in_so) %>%
+  group_by(Clusters) %>%
+  mutate(signed_loglog_p = ifelse(avg_logFC > 0,
+                                    log10(-log10(p_val)),
+                                    -log10(-log10(p_val)))) %>%
+  arrange(signed_loglog_p) %>%
+  mutate(rank = row_number()) %>%
+  ggplot() +
+  aes(rank, signed_loglog_p) +
+  # geom_point(size = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  # geom_hline(yintercept = c(log10(-log10(0.05)),-log10(-log10(0.05))),
+  #            color = "red") +
+  # geom_line() +
+  geom_point(size = 0.1, alpha = 0.5) +
+  geom_point(data = ~..1 %>% filter(gene %in% chr1_off_target_genes),
+             size = 2) +
+  geom_text_repel(aes(label = gene),
+                  data = ~..1 %>% filter(gene %in% chr1_off_target_genes)) +
+  facet_wrap(~Clusters, ncol = 5, scale = "free_y") +
+  remove_x_spine() +
+  theme(strip.background = element_blank(),
+        axis.text.x = element_blank()) +
+  labs(title = "Genes differentially expressed between EnhDel vs WT on Chr1",
+       subtitle = "Labelled genes are predicted off-target",
+       y = "(WT) <-- Directional log(-log(p-value)) --> (EnhDel)")
+```
+
+
+
+```{r, fig.width = 15}
+dge_df %>%
+  group_by(Clusters) %>%
+  mutate(signed_loglog_p = ifelse(avg_logFC > 0,
+                                    log10(-log10(p_val)),
+                                    -log10(-log10(p_val)))) %>%
+  arrange(signed_loglog_p) %>%
+  mutate(rank = row_number()) %>%
+  ggplot() +
+  aes(rank, signed_loglog_p) +
+  # geom_point(size = 0.5) +
+  geom_hline(yintercept = 0, linetype = "dotted") +
+  # geom_hline(yintercept = c(log10(-log10(0.05)),-log10(-log10(0.05))),
+  #            color = "red") +
+  # geom_line() +
+  geom_point(size = 0.1, alpha = 0.5) +
+  geom_point(data = ~..1 %>% filter(gene %in% off_target_genes_present),
+             size = 2) +
+  geom_text_repel(aes(label = gene),
+                  data = ~..1 %>% filter(gene %in% off_target_genes_present), 
+                  max.overlaps = Inf, 
+                  direction = "both") +
+  facet_wrap(~Clusters, ncol = 5, scale = "free_y") +
+  remove_x_spine() +
+  theme(strip.background = element_blank(),
+        axis.text.x = element_blank()) +
+  labs(title = "Genes differentially expressed between EnhDel vs WT",
+       subtitle = "Labelled genes are predicted off-target",
+       y = "(WT) <-- Directional log(-log(p-value)) --> (EnhDel)")
+```
+
+
+
+
+
+

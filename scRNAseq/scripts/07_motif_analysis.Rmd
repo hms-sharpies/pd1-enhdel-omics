@@ -1,0 +1,298 @@
+---
+title: "Motif Analysis"
+author: "Amy Huang"
+date: "2023-03-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      fig.width = 7)
+
+library(here)
+source(here("helper.R"))
+source(here("aesthetics.R"))
+theme_set(theme_classic())
+```
+
+# Purpose 
+
+To answer the question, "What are the transcriptional regulators of the exhaustion associated enhancer and how are they expressed in the different subpopulations?
+
+# Set up
+
+To start, read in the Seurat object. 
+
+```{r}
+so <-
+  readRDS(here(
+    "scRNAseq",
+    "data",
+    "processed_data_objects",
+    "00_seurat_workflow.so.rds"
+  ))
+```
+
+
+# Genes identified in the motif analysis
+
+First, get the output from FIMO analysis for the enhancer region. 
+
+```{r }
+exh_enh_test_fimo <-
+  read_tsv(here("scRNAseq", "data", "exh_enh_test_fimo.tsv")) %>%
+  filter(!is.na(sequence_name)) %>%
+  mutate(motif_gene = motif_alt_id %>% str_extract("\\.[:alnum:]*$")) %>%
+  mutate(motif_gene = str_sub(motif_gene, start = 2)) %>%
+  dplyr::relocate(motif_gene, .before = motif_id)
+```
+
+There are `r nrow(exh_enh_test_fimo)` motif significantly associated with the deleted enhancer. However, not all of those are mouse genes. Many motifs actually associate with human or yeast genes, e.g.: 
+<!-- 620 rows -->
+
+```{r}
+exh_enh_test_fimo$motif_gene %>% head()
+```
+
+To identify all the mouse associated genes, we're going to pull out any genes which appear in the gene list that the single cell data was aligned to. You can find this information in the `features.tsv` file from the counts matrices output from the cellranger pipeline. 
+
+Note, we are not using simply the genes present in the Seurat object, since that isn't a full list of genes. 
+
+```{r}
+dirs <- list.files(here("scRNAseq", "data", "counts_matrices"))
+unique_genes <- dirs %>%
+  map_dfr(~ read_tsv(
+    here("scRNAseq", "data", "counts_matrices", ..1, "features.tsv.gz"),
+    col_names = FALSE
+  ), .id = "sample") %>%
+  .$X2 %>%
+  unique()
+```
+
+There are `r length(unique_genes)` unique genes in the mouse transcriptome used (mm10 v.1.2.0). If we look for genes found in the motif analysis, there are `r length(intersect(unique_genes, exh_enh_test_fimo$motif_gene))` genes, which are: 
+<!-- 27933 genes total, 39 genes found in motif analysis -->
+
+```{r}
+intersect(unique_genes, exh_enh_test_fimo$motif_gene) %>% sort()
+```
+
+## GO term enrichment of motif genes
+
+```{r, eval = FALSE}
+library(clusterProfiler)
+library(org.Mm.eg.db)
+ego <- enrichGO(
+  gene          = intersect(unique_genes, exh_enh_test_fimo$motif_gene),
+  universe      = unique_genes,
+  OrgDb         = org.Mm.eg.db,
+  keyType       = "SYMBOL",
+  ont           = "ALL",
+  pAdjustMethod = "BH",
+  pvalueCutoff  = 0.01,
+  qvalueCutoff  = 0.05
+)
+saveRDS(ego, here("scRNAseq", "data", "exh_enh_test_fimo_enrichGO.rds"))
+
+write_csv(as_tibble(ego@result), here("scRNAseq", "data", "exh_enh_test_fimo_enrichGO.csv"))
+```
+
+The top pathways have to do with development, or cell fate commitment. Of the significant pathways, there are 8 pathways that have the word "lymphocyte" or "T cell". 
+
+```{r}
+ego_out <- read_csv(here("scRNAseq", "data", "exh_enh_test_fimo_enrichGO.csv"))
+ego_out %>% 
+  filter(ONTOLOGY == "BP") %>% 
+  filter(qvalue < 0.0001) %>% 
+  arrange(pvalue) %>% 
+  head(5) %>% 
+  dplyr::select(Description, geneID)
+ego_out %>% 
+  filter(ONTOLOGY == "BP") %>% 
+  filter(qvalue < 0.0001) %>% 
+  filter(str_detect(Description, "lymphocyte|T cell")) %>%
+  arrange(pvalue) %>% 
+  dplyr::select(Description, geneID)
+```
+
+# Gene Expression Analysis
+
+```{r}
+lymphocyte_activation_genes <- ego_out %>% 
+  filter(Description == "regulation of lymphocyte activation") %>% 
+  .$geneID %>% 
+  str_split("/") %>% 
+  .[[1]]
+lymphocyte_activation_genes
+```
+
+There are 22 genes that the motif analysis found in the Seurat object: 
+
+```{r}
+motif_genes <- intersect(rownames(so@assays$RNA), exh_enh_test_fimo$motif_gene)
+motif_genes
+```
+
+```{r}
+h_tbl <-
+  get_metadata_from_so(so, genes = motif_genes, metadata = c("genotype", "cluster_ids")) %>%
+  filter(genotype == "W") %>% 
+  dplyr::select(-UMAP_1, -UMAP_2, -genotype, -Erg) %>% 
+  arrange(cluster_ids)
+h_df <- h_tbl %>%
+  dplyr::select(cell, cluster_ids) %>%
+  column_to_rownames("cell")
+row_ann <- rowAnnotation(
+  df = h_df, 
+  col = list(cluster_ids = palette_cluster_ids)
+)
+h_mtx <- h_tbl %>%
+  dplyr::select(-cluster_ids) %>%
+  pivot_longer(cols = 2:ncol(.)) %>%
+  group_by(name) %>%
+  mutate(scale_max_expr = value / max(value)) %>%
+  pivot_wider(id_cols = cell, values_from = scale_max_expr) %>%
+  column_to_rownames("cell") %>%
+  as.matrix()
+h <- Heatmap(
+  h_mtx,
+  name = "scale max 1 expr.",
+  col = viridis(20),
+  show_row_names = FALSE, 
+  cluster_rows = FALSE,
+  left_annotation = row_ann
+)
+h
+```
+
+```{r}
+h_gene_ordering <- c("Ikzf3", "Irf1", "Stat4", 
+  "Smad4", "Gata3", "Runx1", 
+  "Tcf12", "Stat5b", "Stat5a", 
+  "Stat2", "Rel", "Hic1", 
+  "Nr2f6", "Rxra", "Prdm5", 
+  "Plagl1", "Foxq1", "Twist2", 
+  "Bhlha15", "Rarg", "Stat6")
+```
+
+```{r}
+mean_expr_df <- get_metadata_from_so(so, genes = motif_genes) %>%
+  filter(genotype == "W") %>%
+  pivot_longer(cols = motif_genes,
+               names_to = "gene") %>%
+  group_by(gene) %>%
+  summarise(mean_expr = mean(value))
+mean_cluster_expr_df <- get_metadata_from_so(so, genes = motif_genes) %>%
+  filter(genotype == "W") %>%
+  pivot_longer(cols = motif_genes,
+               names_to = "gene") %>%
+  group_by(cluster_ids, gene) %>%
+  summarise(mean_expr = mean(value)) %>%
+  group_by(gene) %>%
+  mutate(zscore_mean_expr = as.vector(scale(mean_expr)),
+         scale_max_mean_expr = mean_expr / max(mean_expr))
+```
+
+```{r}
+
+h_mean <- mean_cluster_expr_df %>%
+  filter(gene != "Erg") %>% 
+  mutate(cluster_ids = factor(cluster_ids, 
+                              levels = rev(names(palette_cluster_ids)))) %>%  
+  mutate(gene = factor(gene, levels = h_gene_ordering)) %>% 
+  ggplot() +
+  aes(gene, cluster_ids, fill = scale_max_mean_expr) +
+  geom_tile() +
+  # geom_text(aes(label = format(mean_expr, digits = 2)), angle = 90) +
+  scale_fill_viridis_c() +
+  remove_spines() +
+  labs(fill = "scale max 1 expr") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+```{r}
+out_df <-
+  get_metadata_from_so(so,
+                       genes = motif_genes,
+                       metadata = c("genotype", "cluster_ids", "orig.ident")) %>%
+  filter(genotype == "W") %>%
+  filter(cluster_ids %in% c("progenitor exhausted", "terminally exhausted")) %>%
+  dplyr::select(-genotype) %>%
+  pivot_longer(cols = motif_genes) %>%
+  filter(name != "Erg") %>% 
+  named_group_split(name) %>%
+  map_dfr(~ ..1 %>%
+            summarise(w_out = wilcox.test(value ~ cluster_ids, data = .) %>%
+                        broom::tidy()),
+          .id = "name") %>%
+  unnest(w_out)
+  
+p_sig_term.v.prog <- out_df %>% 
+  arrange(p.value) %>% 
+  mutate(FDR = p.adjust(p.value, method = "BH")) %>% 
+  mutate(gene = factor(name, levels = h_gene_ordering)) %>% 
+  ggplot() + 
+  aes(gene, -log10(FDR)) + 
+  geom_col() + 
+  geom_point(aes(y = -log10(FDR) + 0.5), 
+             data = ~..1 %>% filter(FDR < 0.05), 
+             color = "red", 
+             shape = 8) + 
+  geom_hline(yintercept = -log10(0.05), color = "red", linetype = "dotted") + 
+  remove_spines() + 
+  scale_y_continuous(expand = c(0, 0), limits = ~c(0, ..1[2]*1.05)) + 
+  theme(axis.title.x = element_blank(), 
+        axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+```{r}
+p_expr <- mean_expr_df %>%
+  mutate(gene = factor(gene, levels = h_gene_ordering)) %>%
+  ggplot() +
+  aes(gene, mean_expr) +
+  geom_col(fill = "black") + 
+  remove_spines() + 
+  scale_y_continuous(expand = c(0, 0)) + 
+  theme(axis.text.x = element_blank(), 
+        axis.title.x = element_blank())
+plot_grid(
+  p_sig_term.v.prog + theme(axis.text.x = element_blank()),
+  p_expr,
+  h_mean,
+  ncol = 1,
+  axis = "lr",
+  align = "v",
+  rel_heights = c(1, 1, 3)
+)
+```
+
+# TFs from Sen et al. Science 2015 CRISPR tiling screen 
+
+The relevant TFs are SOX3, TBX21, RAR. Associated genes should be Sox3, Tbx21, Rara, Rarg
+
+```{r, fig.width = 4, fig.asp = 1}
+get_metadata_from_so(so, genes = c("Tbx21", "Rara", "Rarg")) %>%
+  filter(genotype == "W") %>%
+  pivot_longer(cols = c("Tbx21", "Rara", "Rarg"),
+               names_to = "gene") %>%
+  plot_violin(group = cluster_ids, var = value) +
+  geom_text(aes(label = gene, fill = NA), 
+            x = -Inf, 
+            y = Inf,
+            hjust = -0.1, 
+            vjust = 1.1, 
+            data = ~..1 %>% 
+              dplyr::select(gene) %>% 
+              unique()) + 
+  facet_grid(gene~.) +
+  scale_fill_manual(values = palette_cluster_ids) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1), 
+        strip.text.y = element_blank(), 
+        strip.background = element_blank())
+```
+
+
+
+
