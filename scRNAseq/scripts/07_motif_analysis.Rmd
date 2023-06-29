@@ -293,6 +293,63 @@ get_metadata_from_so(so, genes = c("Tbx21", "Rara", "Rarg")) %>%
         strip.background = element_blank())
 ```
 
+# Genes identiied by TOBIAS as bound
+
+```{r}
+bindetect_dir <- "/Users/amyhuang/Documents/GitHub/tobias_test/BINDetect_output_KW_fimo"
+motifs_binding_in_enh <- read_tsv(
+  file.path(
+    bindetect_dir,
+    "motifs_binding_in_enh.tsv"
+  )
+)
+```
+
+```{r}
+bound_genes <- motifs_binding_in_enh$motif %>%
+  str_extract("MA[:digit:]*\\.1\\.[:alnum:]*") %>%
+  str_sub(start = 10) %>%
+  unique() 
+```
+
+```{r, fig.width = 10, fig.asp = 1}
+get_metadata_from_so(so, genes = bound_genes) %>%
+  filter(genotype == "W") %>%
+  pivot_longer(cols = bound_genes,
+               names_to = "gene") %>%
+  plot_violin(group = cluster_ids, var = value) +
+  geom_text(aes(label = gene, fill = NA), 
+            x = -Inf, 
+            y = Inf,
+            hjust = -0.1, 
+            vjust = 1.1, 
+            data = ~..1 %>% 
+              dplyr::select(gene) %>% 
+              unique()) + 
+  facet_wrap(~gene, ncol = 3) +
+  scale_fill_manual(values = palette_cluster_ids) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1), 
+        strip.text.y = element_blank(), 
+        strip.background = element_blank())
+```
+
+```{r}
+get_metadata_from_so(so, genes = bound_genes) %>%
+  filter(genotype == "W") %>% 
+  pivot_longer(cols = bound_genes,
+               names_to = "gene") %>%
+  group_by(cluster_ids, gene) %>% 
+  summarise(mean_value = mean(value)) %>% 
+  pivot_wider(id_cols = cluster_ids, 
+              names_from = gene, 
+              values_from = mean_value) %>% 
+  select(-Hmx2, -Six3, -Nr2e1) %>% 
+  column_to_rownames("cluster_ids") %>% 
+  as.matrix() %>% 
+  scale() %>% 
+  Heatmap(col = viridis(20), 
+          name = "mean expr.")
+```
 
 
 

@@ -1,0 +1,74 @@
+---
+title: "scRNA-seq sanity checks for ATACseq footprinting"
+author: "Amy Huang"
+date: "2023-04-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      fig.width = 7)
+
+library(here)
+library(forcats)
+source(here("helper.R"))
+source(here("aesthetics.R"))
+theme_set(theme_classic())
+```
+
+# Purpose 
+
+I did footprinting from the ATACseq. Just thinking that the scRNA-seq can be used for some sanity checks. 
+
+# Set up
+
+To start, read in the Seurat object. 
+
+```{r}
+so <-
+  readRDS(here(
+    "scRNAseq",
+    "data",
+    "processed_data_objects",
+    "00_seurat_workflow.so.rds"
+  ))
+```
+
+```{r}
+pdcd1_df <- so@assays$RNA@data["Pdcd1",] %>% 
+  as_tibble(rownames = "cell")
+so@meta.data %>% 
+  as_tibble(rownames = "cell") %>% 
+  filter(cluster_ids %in% c("progenitor exhausted", "terminally exhausted")) %>% 
+  filter(genotype == "W") %>% 
+  left_join(pdcd1_df, by = "cell") %>% 
+  ggplot() + 
+  aes(orig.ident, value) + 
+  geom_violin(scale = "width", aes(fill = cluster_ids), draw_quantiles = 0.5) + 
+  facet_wrap(~cluster_ids, ncol = 5) + 
+  scale_fill_manual(values = palette_cluster_ids) + 
+  theme(axis.line.x = element_blank(), 
+        axis.ticks.x = element_blank(), 
+        strip.background = element_blank(), 
+        legend.position = "none") + 
+  scale_y_continuous(expand = c(0, 0))
+```
+
+```{r}
+tobias_dir <- "/Users/amyhuang/Documents/GitHub/tobias_test"
+list.files(tobias_dir)
+w1.s <- read_tsv(file.path(tobias_dir, "merged_peaks_W1_S_scored.bed"), 
+         col_names = FALSE)
+w1.cn <- read_tsv(file.path(tobias_dir, "merged_peaks_W1_CN_scored.bed"), 
+         col_names = FALSE)
+
+w1.s %>% 
+  left_join(w1.cn, by = c("X1", "X2", "X3")) %>% 
+  filter(X1 == "chr1") %>% 
+  filter(X2 > 94037664 & X3 < 94090703) %>% 
+  ggplot() + 
+  aes(X4.x, X4.y) + 
+  geom_point()
+```
+

@@ -14,6 +14,7 @@ library(SeuratObject)
 library(ggrepel)
 
 source(here("helper.R"))
+source(here("aesthetics.R"))
 theme_set(theme_classic())
 
 # purpose ------
@@ -24,6 +25,48 @@ theme_set(theme_classic())
 # read in data -----
 
 so <- readRDS(here("scRNAseq", "data", "processed_data_objects", "00_seurat_workflow.so.rds"))
+
+# off target Tier 1 ------
+
+off_target_genes <- c("Cmtr2", "Snx12", "Lrrc23", "Perp", "2900026A02Rik", "Zc3h13", "Vgll4")
+off_target_genes_present <- off_target_genes[off_target_genes %in% rownames(so@assays$RNA@counts)]
+
+length(off_target_genes) == length(off_target_genes_present)
+# all off_target genes are present
+
+get_metadata_from_so(so, genes = off_target_genes) %>%
+  pivot_longer(cols = off_target_genes,
+               names_to = "gene",
+               values_to = "expr") %>%
+  mutate(cluster_ids = factor(str_wrap(cluster_ids, width = 10),
+                              levels = unique(str_wrap(
+                                names(palette_cluster_ids), width = 10
+                              )))) %>%
+  ggplot() +
+  aes(genotype, expr) +
+  geom_violin(aes(fill = genotype),
+              scale = "width",
+              draw_quantiles = 0.5) +
+  facet_grid(gene ~ cluster_ids) +
+  stat_compare_means(
+    comparisons = combn(c("D", "W", "K"), 2, simplify = FALSE),
+    label = "p.signif",
+    size = TEXT_SIZE * GGPLOT_TEXT_SCALE_FACTOR
+  ) +
+  scale_fill_manual(values = palette_genotype) +
+  scale_y_continuous(expand = c(0, 0), limits = ~ c(0, ..1[2] * 1.2)) +
+  remove_x_spine() +
+  theme(
+    strip.background = element_blank(),
+    legend.position = "none",
+    strip.text.y = element_text(
+      angle = 0,
+      hjust = 0,
+      vjust = 0.5
+    )
+  )
+
+# off target CFD 0.3 ------
 
 genes_df <- read_tsv(here("scRNAseq", "data", "genes.gtf"), skip = 5, col_names = FALSE) %>%
   filter(X3 == "gene") %>%

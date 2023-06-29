@@ -1,0 +1,87 @@
+---
+title: "motif analysis 2"
+author: "Amy Huang"
+date: "2023-06-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+library(tidyverse)
+library(Seurat)
+source(here("helper.R"))
+source(here("aesthetics.R"))
+theme_set(theme_classic())
+```
+
+# Set up
+
+To start, read in the Seurat object. 
+
+```{r}
+so <-
+  readRDS(here(
+    "scRNAseq",
+    "data",
+    "processed_data_objects",
+    "00_seurat_workflow.so.rds"
+  ))
+```
+
+# Genes identified in the motif analysis
+
+First, get the output from FIMO analysis for the enhancer region. 
+
+```{r }
+bindetect_dir <- "/Users/amyhuang/Documents/GitHub/tobias_test/BINDetect_output_KW_fimo"
+motifs_binding_in_enh <- read_tsv(file.path(bindetect_dir, "motifs_binding_in_enh.tsv"))
+```
+
+```{r}
+s_genes <- motifs_binding_in_enh %>% 
+  filter(is.na(CN)) %>% 
+  mutate(motif_gene = str_extract(motif, "^.*_MA") %>% str_sub(end = -4)) %>% 
+  .$motif_gene
+s_genes
+```
+
+```{r}
+
+plot_gene_violin <- function(gene_str) {
+  get_metadata_from_so(so, genes = gene_str) %>%
+    filter(genotype == "W") %>%
+    ggplot() +
+    aes(cluster_ids, get(gene_str)) +
+    geom_violin(scale = "width", aes(fill = cluster_ids)) +
+    stat_compare_means(comparisons = list(c(
+      "progenitor exhausted",
+      "terminally exhausted"
+    )), method = "wilcox.test") +
+    scale_y_continuous(expand = c(0, 0), limits = ~ c(0, ..1[2] * 1.1)) +
+    scale_fill_manual(values = palette_cluster_ids) +
+    remove_x_spine() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "none") + 
+    labs(y = gene_str)
+}
+```
+
+
+```{r, fig.width = 5, fig.height = 3}
+plot_grid(plot_gene_violin("Stat5a"), plot_gene_violin("Stat5b"))
+plot_grid(plot_gene_violin("Stat1"), plot_gene_violin("Stat3"))
+plot_grid(plot_gene_violin("Prdm1"), plot_gene_violin("Sox4"))
+```
+
+```{r, fig.width = 5, fig.height = 3}
+plot_grid(plot_gene_violin("Runx1"), 
+          plot_gene_violin("Runx2"), 
+          plot_gene_violin("Runx3"), 
+          ncol = 3)
+```
+
+
+
+

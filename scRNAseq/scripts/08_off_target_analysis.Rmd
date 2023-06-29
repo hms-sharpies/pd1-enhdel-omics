@@ -91,6 +91,92 @@ Heatmap(h_mtx,
         left_annotation = row_ann)
 ```
 
+```{r, fig.width = 3}
+thresh <- 0.1
+mean_expr_df <- get_metadata_from_so(so, genes = off_target_genes_present) %>% 
+  pivot_longer(cols = off_target_genes_present) %>% 
+  group_by(name) %>% 
+  summarise(mean_value = mean(value)) %>%
+  arrange(mean_value)
+mean_expr_df %>% 
+  ggplot() + 
+  aes(mean_value) + 
+  geom_histogram(bins = 50) + 
+  geom_vline(xintercept = thresh) + 
+  labs(x = "Mean log-normalized expression", y = "Frequency")
+off_target_genes_present_expressed <- mean_expr_df %>% 
+  filter(mean_value > thresh) %>% 
+  .$name
+```
+
+```{r}
+off_target_genes_present_expressed
+```
+
+
+```{r, fig.width = 7}
+h_tbl <- get_metadata_from_so(so, genes = off_target_genes_present_expressed, 
+                     metadata = c("genotype", "orig.ident", "cluster_ids"), 
+                     slot = "scale.data") %>% 
+  arrange(genotype, cluster_ids)
+h_df <- h_tbl %>% 
+  dplyr::select(cell, genotype, cluster_ids) %>% 
+  column_to_rownames("cell")
+row_ann <- rowAnnotation(
+  df = h_df, 
+  col = list(
+    genotype = palette_genotype, 
+    cluster_ids = palette_cluster_ids
+  )
+)
+h_mtx <- h_tbl %>% 
+  dplyr::select(cell, all_of(off_target_genes_present_expressed)) %>% 
+  column_to_rownames("cell") %>% 
+  as.matrix()
+Heatmap(h_mtx, 
+        name = "scaled\nlognorm expr.", 
+        # col = magma(25), 
+        show_row_names = FALSE, 
+        cluster_rows = FALSE, 
+        left_annotation = row_ann)
+```
+
+```{r}
+dge_df <- read_tsv(
+  here(
+    "scRNAseq",
+    "data",
+    "processed_data_tables",
+    "01_dge.genotype_one-v-one_per-cluster.tsv"
+  )
+) %>% filter(contrast == "D_W")
+```
+
+```{r, fig.asp = 2, fig.width = 4.5}
+plot_df <- get_metadata_from_so(so, genes = off_target_genes_present_expressed, 
+                     metadata = c("genotype", "orig.ident", "cluster_ids")) %>% 
+  pivot_longer(cols = off_target_genes_present_expressed) %>% 
+  mutate(Clusters = case_when(
+    cluster_ids == "terminally exhausted" ~ "terminal",
+    cluster_ids %>% str_detect("exhausted") ~ str_remove(cluster_ids, " exhausted"),
+    TRUE ~ as.character(cluster_ids)
+  )) %>% 
+  filter(genotype %in% c("D", "W"))
+plot_df %>% 
+  ggplot() + 
+  aes(genotype, value) + 
+  geom_violin(scale = "width") +
+  geom_text(aes(x = 1.5, y = 0, label = signif),
+            data = dge_df %>%
+              filter(gene %in% plot_df$name) %>%
+              mutate(signif = p_val_adj < 0.05))  +
+  facet_grid(name~Clusters) + 
+  remove_spines() + 
+  theme(strip.background = element_blank(), 
+        strip.text.y = element_text(angle = 0, hjust = 0, vjust = 0.5), 
+        axis.text.y = element_blank()) + 
+  labs(y = "log-normalized expression")
+```
 
 # Chr 1
 
@@ -121,16 +207,6 @@ length(chr1_off_target_genes)
 # of those, 5 are off target genes
 ```
 
-```{r}
-dge_df <- read_tsv(
-  here(
-    "scRNAseq",
-    "data",
-    "processed_data_tables",
-    "01_dge.genotype_one-v-one_per-cluster.tsv"
-  )
-) %>% filter(contrast == "D_W")
-```
 
 
 ```{r}
