@@ -87,4 +87,3 @@ dependencies:
       - urllib3==1.26.15
       - wand==0.6.11
       - xlsxwriter==3.1.0
-prefix: /Users/amyhuang/miniconda3/envs/tobias3.7_env
