@@ -43,14 +43,16 @@ library(devtools)
 devtools::install_github("YosefLab/VISION")
 ```
 
-3. Download the single cell counts matrices from the Single Cell Portal and place them in the `scRNAseq/data/counts_matrices`. 
-4. Regenerate all intermediate data tables and objects by running the script `driver.R`. Warning: It may take a long time, >24 hours depending on compute power, to execute. 
-5. Use Rmarkdown to knit the `.Rmd` files in the `figures/` directory to output the figures in either HTML or PDF format. 
+3. To reproduce the footprinting analysis, you must also install an appropriate conda environment to run the TOBIAS command line tool. You can do this by [creating a conda environment from the YML file](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file) `tobias3.7_env.yml`. 
+3. Download the single cell counts matrices from the Single Cell Portal and place them in the `scRNAseq/data/counts_matrices` directory. 
+4. For the footprinting analysis, download the ATACseq bam files from the Single Cell Portal and place them in the `ATACseq/data/bams` directory. Also download the compressed directory `footprinting.zip` and place it at `ATACseq/data/footprinting`.
+5. Regenerate all intermediate data tables and objects by running the script `driver.R` and `footprinting.sh`. Warning: It may take a long time, >24 hours depending on compute power, to execute. You can blame the signature scoring script for this; other steps are relatively quick. 
+6. Use Rmarkdown to knit the `.Rmd` files in the `figures/` directory to output the figures in either HTML or PDF format. 
 
 Alternatively, to bypass the long compute time in step 3, follow the instructions below to generate/acquire processed data files, then knit the `.Rmd` files in the `figures/` directory. 
 
 1. Run the script at `scRNAseq/scripts/02_gene_signatures` to generate the `scRNAseq/data/gene_signatures/02_gene_signatures.msigdbr_H-C2-C7.tsv`
-2. Download the processed data files from the Study Files section [Single Cell Portal](https://singlecell.broadinstitute.org/single_cell/study/SCP1772/pd-1-enhancer-deletion#study-download) and place them at the following paths. 
+2. Download additional processed data files from the Study Files section [Single Cell Portal](https://singlecell.broadinstitute.org/single_cell/study/SCP1772/pd-1-enhancer-deletion#study-download) and place them at the following paths. 
 
 * scRNAseq/data/counts_matrices.zip -> decompress
 * scRNAseq/data/processed_data_tables.zip -> decompress
@@ -62,12 +64,11 @@ Alternatively, to bypass the long compute time in step 3, follow the instruction
 
 Please contact a corresponding author for any questions, comments, or concerns regarding the paper in general.
 
+For issues with code/reproducibility, please open a GitHub issue. 
+
 ## Compute environment and version
 
 ```{r}
 sessionInfo()
 ```
 
-### A note on reproducibility
-
-Anyone running the code should use the same R and R package versions as defined by `renv`. However, I cannot guarantee that one will get the exact same results in the single cell clustering unless one also ensures that they are using the same processor and operating system. See [this discussion](https://github.com/scverse/scanpy/issues/2014) about problems in reproducibility of single cell clustering analyses persisting in Scanpy. 

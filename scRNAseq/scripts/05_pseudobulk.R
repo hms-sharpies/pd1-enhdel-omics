@@ -15,6 +15,7 @@ library(SingleCellExperiment)
 library(scater)
 library(Matrix.utils)
 library(DESeq2)
+library(Rsc)
 
 detach("package:SeuratObject", unload = T)
 
@@ -45,6 +46,25 @@ rlog_list <- map(deseq_list, rlog, blind = TRUE)
 
 out_path <- here("scRNAseq", "data", "processed_data_objects", "05_pseudobulk.deseq_list.rds")
 saveRDS(deseq_list, out_path)
+
+counts <- purrr::map_dfr(
+  deseq_list,
+  ~counts(..1, normalized = FALSE) %>%
+    as_tibble(rownames = "gene"),
+  .id = "cluster"
+) %>%
+  pivot_longer(cols = 3:ncol(.),
+               names_to = "sample",
+               values_to = "norm_count") %>%
+  pivot_wider(id_cols = gene,
+              names_from = c(sample, cluster),
+              values_from = norm_count,
+              values_fill = 0)
+write_tsv(
+  counts,
+  here("scRNAseq", "data", "processed_data_tables",
+       "05_pseudobulk.counts.tsv")
+)
 
 norm_counts <- purrr::map_dfr(
     deseq_list,

@@ -4,7 +4,6 @@
 # pd1-enhdel-omics
 
 <!-- badges: start -->
-
 <!-- badges: end -->
 
 This repository provides code to reproduce results and figures from
@@ -18,19 +17,18 @@ deletion](https://singlecell.broadinstitute.org/single_cell/study/SCP1772/pd-1-e
 
 ## Contents
 
-  - `scRNAseq`: directory containing the data and scripts for
-    reproducing scRNA-seq analyses and figures
-  - `ATACseq`: directory containing the data and scripts for reproducing
-    ATAC-seq analyses and figures
-  - `figures`: directory containing the scripts to reproduce the figures
-  - `renv`: directory containing all information for tracking R package
-    versioning and downloads. See [Introduction to
-    renv](https://rstudio.github.io/renv/articles/renv.html) for details
-  - `aesthetics.R`: file containing aesthetics and themes for the
-    project
-  - `helper.R`: file containing libraries and helper functions
-  - `driver.R`: optional script to regenerate all intermediate results.
-    May take a long time (\> 24 hours) to execute.
+- `scRNAseq`: directory containing the data and scripts for reproducing
+  scRNA-seq analyses and figures
+- `ATACseq`: directory containing the data and scripts for reproducing
+  ATAC-seq analyses and figures
+- `figures`: directory containing the scripts to reproduce the figures
+- `renv`: directory containing all information for tracking R package
+  versioning and downloads. See [Introduction to
+  renv](https://rstudio.github.io/renv/articles/renv.html) for details
+- `aesthetics.R`: file containing aesthetics and themes for the project
+- `helper.R`: file containing libraries and helper functions
+- `driver.R`: optional script to regenerate all intermediate results.
+  May take a long time (\> 24 hours) to execute.
 
 ## Instructions
 
@@ -44,17 +42,28 @@ To regenerate figures from raw data, take the following steps:
     from their GitHub repository. The package can be installed using
     `devtools` by running the code below:
 
-<!-- end list -->
+<!-- -->
 
     library(devtools)
     devtools::install_github("YosefLab/VISION")
 
-3.  Download the single cell counts matrices from the Single Cell Portal
-    and place them in the `scRNAseq/data/counts_matrices`.
-4.  Regenerate all intermediate data tables and objects by running the
-    script `driver.R`. Warning: It may take a long time, \>24 hours
-    depending on compute power, to execute.
-5.  Use Rmarkdown to knit the `.Rmd` files in the `figures/` directory
+3.  To reproduce the footprinting analysis, you must also install an
+    appropriate conda environment to run the TOBIAS command line tool.
+    You can do this by [creating a conda environment from the YML
+    file](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file)
+    `tobias3.7_env.yml`.
+4.  Download the single cell counts matrices from the Single Cell Portal
+    and place them in the `scRNAseq/data/counts_matrices` directory.
+5.  For the footprinting analysis, download the ATACseq bam files from
+    the Single Cell Portal and place them in the `ATACseq/data/bams`
+    directory. Also download the compressed directory `footprinting.zip`
+    and place it at `ATACseq/data/footprinting`.
+6.  Regenerate all intermediate data tables and objects by running the
+    script `driver.R` and `footprinting.sh`. Warning: It may take a long
+    time, \>24 hours depending on compute power, to execute. You can
+    blame the signature scoring script for this; other steps are
+    relatively quick.
+7.  Use Rmarkdown to knit the `.Rmd` files in the `figures/` directory
     to output the figures in either HTML or PDF format.
 
 Alternatively, to bypass the long compute time in step 3, follow the
@@ -64,23 +73,23 @@ the `.Rmd` files in the `figures/` directory.
 1.  Run the script at `scRNAseq/scripts/02_gene_signatures` to generate
     the
     `scRNAseq/data/gene_signatures/02_gene_signatures.msigdbr_H-C2-C7.tsv`
-2.  Download the processed data files from the Study Files section
-    [Single Cell
+2.  Download additional processed data files from the Study Files
+    section [Single Cell
     Portal](https://singlecell.broadinstitute.org/single_cell/study/SCP1772/pd-1-enhancer-deletion#study-download)
     and place them at the following paths.
 
-<!-- end list -->
-
-  - scRNAseq/data/counts\_matrices.zip -\> decompress
-  - scRNAseq/data/processed\_data\_tables.zip -\> decompress
-  - scRNAseq/data/processed\_data\_objects/00\_seurat\_workflow.so.rds
-  - scRNAseq/data/processed\_data\_objects/05\_pseudobulk.deseq\_list.rds
-  - ATACseq/data/processed\_data\_tables/01\_analyze.deseq\_results\_tidy.tsv
+- scRNAseq/data/counts_matrices.zip -\> decompress
+- scRNAseq/data/processed_data_tables.zip -\> decompress
+- scRNAseq/data/processed_data_objects/00_seurat_workflow.so.rds
+- scRNAseq/data/processed_data_objects/05_pseudobulk.deseq_list.rds
+- ATACseq/data/processed_data_tables/01_analyze.deseq_results_tidy.tsv
 
 ## Contact
 
 Please contact a corresponding author for any questions, comments, or
 concerns regarding the paper in general.
+
+For issues with code/reproducibility, please open a GitHub issue.
 
 ## Compute environment and version
 
@@ -108,13 +117,3 @@ sessionInfo()
 #> [13] yaml_2.3.5          fastmap_1.1.0       compiler_4.0.3     
 #> [16] BiocManager_1.30.17 htmltools_0.5.2     knitr_1.39
 ```
-
-### A note on reproducibility
-
-Anyone running the code should use the same R and R package versions as
-defined by `renv`. However, I cannot guarantee that one will get the
-exact same results in the single cell clustering unless one also ensures
-that they are using the same processor and operating system. See [this
-discussion](https://github.com/scverse/scanpy/issues/2014) about
-problems in reproducibility of single cell clustering analyses
-persisting in Scanpy.
