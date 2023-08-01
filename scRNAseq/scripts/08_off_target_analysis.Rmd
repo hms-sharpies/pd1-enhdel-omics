@@ -2,7 +2,9 @@
 title: "Off target effects"
 author: "Amy Huang"
 date: "2023-03-10"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -35,242 +37,303 @@ so <-
   ))
 ```
 
-And the table of off-target genes predicted by the Mudra analysis. 
+# Final Analysis
 
 ```{r}
-off_target_genes <-
-  read_tsv(here("scRNAseq", "data", "off_target_CFD_0.3.txt"),
-           col_names = FALSE)$X1
-off_target_genes
+off_target_genes <- c("2900026A02Rik",
+                      "Cmtr2",
+                      "Lrrc23",
+                      "Perp",
+                      "Snx12",
+                      "Vgll4",
+                      "Zc3h13")
+gene_expr_tidy <- 
+  get_metadata_from_so(so, genes = off_target_genes) %>% 
+  pivot_longer(cols = all_of(off_target_genes))
 ```
 
-Of the `r length(off_target_genes)`, there are `r length(off_target_genes[off_target_genes %in% rownames(so@assays$RNA@counts)])` genes that are present in the Seurat object.
-<!-- 70 genes,  37 genes present -->
-
-```{r}
-off_target_genes_present <- off_target_genes[off_target_genes %in% rownames(so@assays$RNA@counts)]
-off_target_genes_present
-```
-
-```{r}
-gene_expr_tidy <- get_metadata_from_so(so, genes = off_target_genes_present) %>%
-  pivot_longer(cols = off_target_genes_present,
-               names_to = "gene")
-zscore_mean_df <- gene_expr_tidy %>%
-  group_by(orig.ident, gene) %>%
-  summarise(mean_value = mean(value)) %>%
-  group_by(gene) %>%
-  mutate(zscore_mean_value = as.vector(scale(mean_value))) %>%
-  ungroup()
-```
-
-```{r, fig.width = 7}
-h_tbl <- get_metadata_from_so(so, genes = off_target_genes_present, 
-                     metadata = c("genotype", "orig.ident", "cluster_ids"), 
-                     slot = "scale.data") %>% 
-  arrange(genotype, cluster_ids)
-h_df <- h_tbl %>% 
-  dplyr::select(cell, genotype, cluster_ids) %>% 
-  column_to_rownames("cell")
-row_ann <- rowAnnotation(
-  df = h_df, 
-  col = list(
-    genotype = palette_genotype, 
-    cluster_ids = palette_cluster_ids
-  )
-)
-h_mtx <- h_tbl %>% 
-  dplyr::select(cell, all_of(off_target_genes_present)) %>% 
-  column_to_rownames("cell") %>% 
-  as.matrix()
-Heatmap(h_mtx, 
-        name = "scaled\nlognorm expr.", 
-        # col = magma(25), 
-        show_row_names = FALSE, 
-        cluster_rows = FALSE, 
-        left_annotation = row_ann)
-```
-
-```{r, fig.width = 3}
-thresh <- 0.1
-mean_expr_df <- get_metadata_from_so(so, genes = off_target_genes_present) %>% 
-  pivot_longer(cols = off_target_genes_present) %>% 
-  group_by(name) %>% 
-  summarise(mean_value = mean(value)) %>%
-  arrange(mean_value)
-mean_expr_df %>% 
+```{r, fig.width = 6, fig.height = 3.5}
+gene_expr_tidy %>% 
   ggplot() + 
-  aes(mean_value) + 
-  geom_histogram(bins = 50) + 
-  geom_vline(xintercept = thresh) + 
-  labs(x = "Mean log-normalized expression", y = "Frequency")
-off_target_genes_present_expressed <- mean_expr_df %>% 
-  filter(mean_value > thresh) %>% 
-  .$name
-```
-
-```{r}
-off_target_genes_present_expressed
-```
-
-
-```{r, fig.width = 7}
-h_tbl <- get_metadata_from_so(so, genes = off_target_genes_present_expressed, 
-                     metadata = c("genotype", "orig.ident", "cluster_ids"), 
-                     slot = "scale.data") %>% 
-  arrange(genotype, cluster_ids)
-h_df <- h_tbl %>% 
-  dplyr::select(cell, genotype, cluster_ids) %>% 
-  column_to_rownames("cell")
-row_ann <- rowAnnotation(
-  df = h_df, 
-  col = list(
-    genotype = palette_genotype, 
-    cluster_ids = palette_cluster_ids
-  )
-)
-h_mtx <- h_tbl %>% 
-  dplyr::select(cell, all_of(off_target_genes_present_expressed)) %>% 
-  column_to_rownames("cell") %>% 
-  as.matrix()
-Heatmap(h_mtx, 
-        name = "scaled\nlognorm expr.", 
-        # col = magma(25), 
-        show_row_names = FALSE, 
-        cluster_rows = FALSE, 
-        left_annotation = row_ann)
-```
-
-```{r}
-dge_df <- read_tsv(
-  here(
-    "scRNAseq",
-    "data",
-    "processed_data_tables",
-    "01_dge.genotype_one-v-one_per-cluster.tsv"
-  )
-) %>% filter(contrast == "D_W")
-```
-
-```{r, fig.asp = 2, fig.width = 4.5}
-plot_df <- get_metadata_from_so(so, genes = off_target_genes_present_expressed, 
-                     metadata = c("genotype", "orig.ident", "cluster_ids")) %>% 
-  pivot_longer(cols = off_target_genes_present_expressed) %>% 
-  mutate(Clusters = case_when(
-    cluster_ids == "terminally exhausted" ~ "terminal",
-    cluster_ids %>% str_detect("exhausted") ~ str_remove(cluster_ids, " exhausted"),
-    TRUE ~ as.character(cluster_ids)
-  )) %>% 
-  filter(genotype %in% c("D", "W"))
-plot_df %>% 
-  ggplot() + 
-  aes(genotype, value) + 
-  geom_violin(scale = "width") +
-  geom_text(aes(x = 1.5, y = 0, label = signif),
-            data = dge_df %>%
-              filter(gene %in% plot_df$name) %>%
-              mutate(signif = p_val_adj < 0.05))  +
-  facet_grid(name~Clusters) + 
-  remove_spines() + 
+  aes(genotype, value, fill = genotype) + 
+  geom_violin(scale = "width") + 
+  facet_grid(cluster_ids~name) + 
+  remove_x_spine() + 
   theme(strip.background = element_blank(), 
-        strip.text.y = element_text(angle = 0, hjust = 0, vjust = 0.5), 
-        axis.text.y = element_blank()) + 
-  labs(y = "log-normalized expression")
-```
-
-# Chr 1
-
-```{r}
-genes_df <- read_tsv(here("scRNAseq", "data", "genes.gtf"), skip = 5, col_names = FALSE) %>%
-  filter(X3 == "gene") %>%
-  separate(X9, into = c("gene_id", "gene_version", "gene_name", "gene_source", "gene_biotype"),
-           sep = "; ") %>%
-  mutate(gene_name = str_sub(gene_name, start = 12, end = -2)) %>%
-  dplyr::relocate(gene_name, .before = X1)
-```
-
-```{r}
-# get genes from chromosome 1
-chr1_genes_df <- genes_df %>%
-  filter(X1 == "1")
-
-all_genes_in_so <- rownames(so@assays$RNA@counts)
-length(all_genes_in_so)
-# there are 14,462 genes in the Seurat object
-
-chr1_genes_in_so <- all_genes_in_so[all_genes_in_so %in% chr1_genes_df$gene_name]
-length(chr1_genes_in_so)
-# there are 859 genes on Chr1 found
-
-chr1_off_target_genes <- off_target_genes[off_target_genes %in% chr1_genes_in_so]
-length(chr1_off_target_genes)
-# of those, 5 are off target genes
+        strip.text.y = element_text(angle = 0, hjust = 0), 
+        legend.position = "none") + 
+  scale_fill_manual(values = palette_genotype) + 
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = ~c(..1[1], ..1[2]*1.25)) + 
+  stat_compare_means(comparison = list(c("D", "W"), 
+                                       c("D", "K"), 
+                                       c("W", "K")), 
+                     label = "p.signif", 
+                     size = 3)
 ```
 
 
-
-```{r}
-dge_df %>%
-  filter(gene %in% chr1_genes_in_so) %>%
-  group_by(Clusters) %>%
-  mutate(signed_loglog_p = ifelse(avg_logFC > 0,
-                                    log10(-log10(p_val)),
-                                    -log10(-log10(p_val)))) %>%
-  arrange(signed_loglog_p) %>%
-  mutate(rank = row_number()) %>%
-  ggplot() +
-  aes(rank, signed_loglog_p) +
-  # geom_point(size = 0.5) +
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  # geom_hline(yintercept = c(log10(-log10(0.05)),-log10(-log10(0.05))),
-  #            color = "red") +
-  # geom_line() +
-  geom_point(size = 0.1, alpha = 0.5) +
-  geom_point(data = ~..1 %>% filter(gene %in% chr1_off_target_genes),
-             size = 2) +
-  geom_text_repel(aes(label = gene),
-                  data = ~..1 %>% filter(gene %in% chr1_off_target_genes)) +
-  facet_wrap(~Clusters, ncol = 5, scale = "free_y") +
+```{r, fig.width = 6, fig.height = 2}
+gene_expr_tidy %>% 
+  filter(genotype != "K") %>% 
+  filter(cluster_ids != "dividing") %>% 
+  ggplot() + 
+  aes(genotype, value, fill = genotype) + 
+  geom_violin(scale = "width", size = 0.2) + 
+  facet_grid(cluster_ids~name) + 
   remove_x_spine() +
-  theme(strip.background = element_blank(),
-        axis.text.x = element_blank()) +
-  labs(title = "Genes differentially expressed between EnhDel vs WT on Chr1",
-       subtitle = "Labelled genes are predicted off-target",
-       y = "(WT) <-- Directional log(-log(p-value)) --> (EnhDel)")
+  theme(
+    strip.background = element_blank(),
+    legend.position = "none",
+    strip.text.y = element_text(angle = 0, hjust = 0)
+  ) + 
+  scale_fill_manual(values = palette_genotype) + 
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = ~c(..1[1], ..1[2]*1.3), 
+                     breaks = c(0, 2, 4)) + 
+  stat_compare_means(comparison = list(c("D", "W")), 
+                     label = "p.signif", 
+                     size = 3)
 ```
 
+<!-- # Previous Analysis -->
+
+<!-- And the table of off-target genes predicted by the Mudra analysis.  -->
+
+<!-- ```{r} -->
+<!-- off_target_genes <- -->
+<!--   read_tsv(here("scRNAseq", "data", "off_target_CFD_0.3.txt"), -->
+<!--            col_names = FALSE)$X1 -->
+<!-- off_target_genes -->
+<!-- ``` -->
+
+<!-- Of the `r length(off_target_genes)`, there are `r length(off_target_genes[off_target_genes %in% rownames(so@assays$RNA@counts)])` genes that are present in the Seurat object. -->
+<!-- <!-- 70 genes,  37 genes present --> -->
+
+<!-- ```{r} -->
+<!-- off_target_genes_present <- off_target_genes[off_target_genes %in% rownames(so@assays$RNA@counts)] -->
+<!-- off_target_genes_present -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- gene_expr_tidy <- get_metadata_from_so(so, genes = off_target_genes_present) %>% -->
+<!--   pivot_longer(cols = off_target_genes_present, -->
+<!--                names_to = "gene") -->
+<!-- zscore_mean_df <- gene_expr_tidy %>% -->
+<!--   group_by(orig.ident, gene) %>% -->
+<!--   summarise(mean_value = mean(value)) %>% -->
+<!--   group_by(gene) %>% -->
+<!--   mutate(zscore_mean_value = as.vector(scale(mean_value))) %>% -->
+<!--   ungroup() -->
+<!-- ``` -->
+
+<!-- ```{r, fig.width = 7} -->
+<!-- h_tbl <- get_metadata_from_so(so, genes = off_target_genes_present,  -->
+<!--                      metadata = c("genotype", "orig.ident", "cluster_ids"),  -->
+<!--                      slot = "scale.data") %>%  -->
+<!--   arrange(genotype, cluster_ids) -->
+<!-- h_df <- h_tbl %>%  -->
+<!--   dplyr::select(cell, genotype, cluster_ids) %>%  -->
+<!--   column_to_rownames("cell") -->
+<!-- row_ann <- rowAnnotation( -->
+<!--   df = h_df,  -->
+<!--   col = list( -->
+<!--     genotype = palette_genotype,  -->
+<!--     cluster_ids = palette_cluster_ids -->
+<!--   ) -->
+<!-- ) -->
+<!-- h_mtx <- h_tbl %>%  -->
+<!--   dplyr::select(cell, all_of(off_target_genes_present)) %>%  -->
+<!--   column_to_rownames("cell") %>%  -->
+<!--   as.matrix() -->
+<!-- Heatmap(h_mtx,  -->
+<!--         name = "scaled\nlognorm expr.",  -->
+<!--         # col = magma(25),  -->
+<!--         show_row_names = FALSE,  -->
+<!--         cluster_rows = FALSE,  -->
+<!--         left_annotation = row_ann) -->
+<!-- ``` -->
+
+<!-- ```{r, fig.width = 3} -->
+<!-- thresh <- 0.1 -->
+<!-- mean_expr_df <- get_metadata_from_so(so, genes = off_target_genes_present) %>%  -->
+<!--   pivot_longer(cols = off_target_genes_present) %>%  -->
+<!--   group_by(name) %>%  -->
+<!--   summarise(mean_value = mean(value)) %>% -->
+<!--   arrange(mean_value) -->
+<!-- mean_expr_df %>%  -->
+<!--   ggplot() +  -->
+<!--   aes(mean_value) +  -->
+<!--   geom_histogram(bins = 50) +  -->
+<!--   geom_vline(xintercept = thresh) +  -->
+<!--   labs(x = "Mean log-normalized expression", y = "Frequency") -->
+<!-- off_target_genes_present_expressed <- mean_expr_df %>%  -->
+<!--   filter(mean_value > thresh) %>%  -->
+<!--   .$name -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- off_target_genes_present_expressed -->
+<!-- ``` -->
 
 
-```{r, fig.width = 15}
-dge_df %>%
-  group_by(Clusters) %>%
-  mutate(signed_loglog_p = ifelse(avg_logFC > 0,
-                                    log10(-log10(p_val)),
-                                    -log10(-log10(p_val)))) %>%
-  arrange(signed_loglog_p) %>%
-  mutate(rank = row_number()) %>%
-  ggplot() +
-  aes(rank, signed_loglog_p) +
-  # geom_point(size = 0.5) +
-  geom_hline(yintercept = 0, linetype = "dotted") +
-  # geom_hline(yintercept = c(log10(-log10(0.05)),-log10(-log10(0.05))),
-  #            color = "red") +
-  # geom_line() +
-  geom_point(size = 0.1, alpha = 0.5) +
-  geom_point(data = ~..1 %>% filter(gene %in% off_target_genes_present),
-             size = 2) +
-  geom_text_repel(aes(label = gene),
-                  data = ~..1 %>% filter(gene %in% off_target_genes_present), 
-                  max.overlaps = Inf, 
-                  direction = "both") +
-  facet_wrap(~Clusters, ncol = 5, scale = "free_y") +
-  remove_x_spine() +
-  theme(strip.background = element_blank(),
-        axis.text.x = element_blank()) +
-  labs(title = "Genes differentially expressed between EnhDel vs WT",
-       subtitle = "Labelled genes are predicted off-target",
-       y = "(WT) <-- Directional log(-log(p-value)) --> (EnhDel)")
-```
+<!-- ```{r, fig.width = 7} -->
+<!-- h_tbl <- get_metadata_from_so(so, genes = off_target_genes_present_expressed,  -->
+<!--                      metadata = c("genotype", "orig.ident", "cluster_ids"),  -->
+<!--                      slot = "scale.data") %>%  -->
+<!--   arrange(genotype, cluster_ids) -->
+<!-- h_df <- h_tbl %>%  -->
+<!--   dplyr::select(cell, genotype, cluster_ids) %>%  -->
+<!--   column_to_rownames("cell") -->
+<!-- row_ann <- rowAnnotation( -->
+<!--   df = h_df,  -->
+<!--   col = list( -->
+<!--     genotype = palette_genotype,  -->
+<!--     cluster_ids = palette_cluster_ids -->
+<!--   ) -->
+<!-- ) -->
+<!-- h_mtx <- h_tbl %>%  -->
+<!--   dplyr::select(cell, all_of(off_target_genes_present_expressed)) %>%  -->
+<!--   column_to_rownames("cell") %>%  -->
+<!--   as.matrix() -->
+<!-- Heatmap(h_mtx,  -->
+<!--         name = "scaled\nlognorm expr.",  -->
+<!--         # col = magma(25),  -->
+<!--         show_row_names = FALSE,  -->
+<!--         cluster_rows = FALSE,  -->
+<!--         left_annotation = row_ann) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- dge_df <- read_tsv( -->
+<!--   here( -->
+<!--     "scRNAseq", -->
+<!--     "data", -->
+<!--     "processed_data_tables", -->
+<!--     "01_dge.genotype_one-v-one_per-cluster.tsv" -->
+<!--   ) -->
+<!-- ) %>% filter(contrast == "D_W") -->
+<!-- ``` -->
+
+<!-- ```{r, fig.asp = 2, fig.width = 4.5} -->
+<!-- plot_df <- get_metadata_from_so(so, genes = off_target_genes_present_expressed,  -->
+<!--                      metadata = c("genotype", "orig.ident", "cluster_ids")) %>%  -->
+<!--   pivot_longer(cols = off_target_genes_present_expressed) %>%  -->
+<!--   mutate(Clusters = case_when( -->
+<!--     cluster_ids == "terminally exhausted" ~ "terminal", -->
+<!--     cluster_ids %>% str_detect("exhausted") ~ str_remove(cluster_ids, " exhausted"), -->
+<!--     TRUE ~ as.character(cluster_ids) -->
+<!--   )) %>%  -->
+<!--   filter(genotype %in% c("D", "W")) -->
+<!-- plot_df %>%  -->
+<!--   ggplot() +  -->
+<!--   aes(genotype, value) +  -->
+<!--   geom_violin(scale = "width") + -->
+<!--   geom_text(aes(x = 1.5, y = 0, label = signif), -->
+<!--             data = dge_df %>% -->
+<!--               filter(gene %in% plot_df$name) %>% -->
+<!--               mutate(signif = p_val_adj < 0.05))  + -->
+<!--   facet_grid(name~Clusters) +  -->
+<!--   remove_spines() +  -->
+<!--   theme(strip.background = element_blank(),  -->
+<!--         strip.text.y = element_text(angle = 0, hjust = 0, vjust = 0.5),  -->
+<!--         axis.text.y = element_blank()) +  -->
+<!--   labs(y = "log-normalized expression") -->
+<!-- ``` -->
+
+<!-- # Chr 1 -->
+
+<!-- ```{r} -->
+<!-- genes_df <- read_tsv(here("scRNAseq", "data", "genes.gtf"), skip = 5, col_names = FALSE) %>% -->
+<!--   filter(X3 == "gene") %>% -->
+<!--   separate(X9, into = c("gene_id", "gene_version", "gene_name", "gene_source", "gene_biotype"), -->
+<!--            sep = "; ") %>% -->
+<!--   mutate(gene_name = str_sub(gene_name, start = 12, end = -2)) %>% -->
+<!--   dplyr::relocate(gene_name, .before = X1) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- # get genes from chromosome 1 -->
+<!-- chr1_genes_df <- genes_df %>% -->
+<!--   filter(X1 == "1") -->
+
+<!-- all_genes_in_so <- rownames(so@assays$RNA@counts) -->
+<!-- length(all_genes_in_so) -->
+<!-- # there are 14,462 genes in the Seurat object -->
+
+<!-- chr1_genes_in_so <- all_genes_in_so[all_genes_in_so %in% chr1_genes_df$gene_name] -->
+<!-- length(chr1_genes_in_so) -->
+<!-- # there are 859 genes on Chr1 found -->
+
+<!-- chr1_off_target_genes <- off_target_genes[off_target_genes %in% chr1_genes_in_so] -->
+<!-- length(chr1_off_target_genes) -->
+<!-- # of those, 5 are off target genes -->
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+<!-- dge_df %>% -->
+<!--   filter(gene %in% chr1_genes_in_so) %>% -->
+<!--   group_by(Clusters) %>% -->
+<!--   mutate(signed_loglog_p = ifelse(avg_logFC > 0, -->
+<!--                                     log10(-log10(p_val)), -->
+<!--                                     -log10(-log10(p_val)))) %>% -->
+<!--   arrange(signed_loglog_p) %>% -->
+<!--   mutate(rank = row_number()) %>% -->
+<!--   ggplot() + -->
+<!--   aes(rank, signed_loglog_p) + -->
+<!--   # geom_point(size = 0.5) + -->
+<!--   geom_hline(yintercept = 0, linetype = "dotted") + -->
+<!--   # geom_hline(yintercept = c(log10(-log10(0.05)),-log10(-log10(0.05))), -->
+<!--   #            color = "red") + -->
+<!--   # geom_line() + -->
+<!--   geom_point(size = 0.1, alpha = 0.5) + -->
+<!--   geom_point(data = ~..1 %>% filter(gene %in% chr1_off_target_genes), -->
+<!--              size = 2) + -->
+<!--   geom_text_repel(aes(label = gene), -->
+<!--                   data = ~..1 %>% filter(gene %in% chr1_off_target_genes)) + -->
+<!--   facet_wrap(~Clusters, ncol = 5, scale = "free_y") + -->
+<!--   remove_x_spine() + -->
+<!--   theme(strip.background = element_blank(), -->
+<!--         axis.text.x = element_blank()) + -->
+<!--   labs(title = "Genes differentially expressed between EnhDel vs WT on Chr1", -->
+<!--        subtitle = "Labelled genes are predicted off-target", -->
+<!--        y = "(WT) <-- Directional log(-log(p-value)) --> (EnhDel)") -->
+<!-- ``` -->
+
+
+
+<!-- ```{r, fig.width = 15} -->
+<!-- dge_df %>% -->
+<!--   group_by(Clusters) %>% -->
+<!--   mutate(signed_loglog_p = ifelse(avg_logFC > 0, -->
+<!--                                     log10(-log10(p_val)), -->
+<!--                                     -log10(-log10(p_val)))) %>% -->
+<!--   arrange(signed_loglog_p) %>% -->
+<!--   mutate(rank = row_number()) %>% -->
+<!--   ggplot() + -->
+<!--   aes(rank, signed_loglog_p) + -->
+<!--   # geom_point(size = 0.5) + -->
+<!--   geom_hline(yintercept = 0, linetype = "dotted") + -->
+<!--   # geom_hline(yintercept = c(log10(-log10(0.05)),-log10(-log10(0.05))), -->
+<!--   #            color = "red") + -->
+<!--   # geom_line() + -->
+<!--   geom_point(size = 0.1, alpha = 0.5) + -->
+<!--   geom_point(data = ~..1 %>% filter(gene %in% off_target_genes_present), -->
+<!--              size = 2) + -->
+<!--   geom_text_repel(aes(label = gene), -->
+<!--                   data = ~..1 %>% filter(gene %in% off_target_genes_present),  -->
+<!--                   max.overlaps = Inf,  -->
+<!--                   direction = "both") + -->
+<!--   facet_wrap(~Clusters, ncol = 5, scale = "free_y") + -->
+<!--   remove_x_spine() + -->
+<!--   theme(strip.background = element_blank(), -->
+<!--         axis.text.x = element_blank()) + -->
+<!--   labs(title = "Genes differentially expressed between EnhDel vs WT", -->
+<!--        subtitle = "Labelled genes are predicted off-target", -->
+<!--        y = "(WT) <-- Directional log(-log(p-value)) --> (EnhDel)") -->
+<!-- ``` -->
 
 
 
