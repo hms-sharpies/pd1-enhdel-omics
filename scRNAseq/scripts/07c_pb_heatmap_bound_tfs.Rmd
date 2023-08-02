@@ -158,6 +158,51 @@ volcano_df %>%
 ```
 
 ```{r}
+gene_zeros_in_prog <- counts(deseq_obj, normalized = TRUE) %>% 
+  as_tibble(rownames = "gene") %>% 
+  filter(K1_K_progenitor == 0 & 
+           K2_K_progenitor == 0 & 
+           W1_W_progenitor == 0 & 
+           W2_W_progenitor == 0) %>% 
+  .$gene
+gene_zeros_in_term <- counts(deseq_obj, normalized = TRUE) %>% 
+  as_tibble(rownames = "gene") %>% 
+  filter(K1_K_terminal == 0 & 
+           K2_K_terminal == 0 & 
+           W1_W_terminal == 0 & 
+           W2_W_terminal == 0) %>% 
+  .$gene
+volcano_df %>% 
+  filter(baseMean != 0) %>% 
+  mutate(gene_zero = case_when(
+    gene %in% gene_zeros_in_prog ~ "zero in prog.", 
+    gene %in% gene_zeros_in_term ~ "zero in term."
+  )) %>% 
+  ggplot() + 
+  aes(baseMean, log2FoldChange, color = gene_zero) +
+  geom_point(alpha = 0.2) + 
+  scale_x_log10() + 
+  scale_color_manual(values = c("zero in prog." = palette_cluster[["progenitor"]], 
+                                "zero in term." = palette_cluster[["terminal"]]))
+
+volcano_df %>% 
+  filter(baseMean != 0) %>% 
+  mutate(signed_log10_q = ifelse(log2FoldChange > 0, 
+                                 -log10(padj), 
+                                 log10(padj))) %>% 
+  mutate(gene_zero = case_when(
+    gene %in% gene_zeros_in_prog ~ "zero in prog.", 
+    gene %in% gene_zeros_in_term ~ "zero in term."
+  )) %>% 
+  ggplot() + 
+  aes(baseMean, signed_log10_q, color = gene_zero) +
+  geom_point(alpha = 0.2) + 
+  scale_x_log10() + 
+  scale_color_manual(values = c("zero in prog." = palette_cluster[["progenitor"]], 
+                                "zero in term." = palette_cluster[["terminal"]]))
+```
+
+```{r}
 col_ann_df <- col_ann_df %>% 
   dplyr::select(-n_bound_in_S, -n_bound_in_CN) %>% 
   as_tibble(rownames = "gene") %>% 
@@ -307,7 +352,7 @@ norm_counts_mtx_filtered %>%
 
 
 ```{r}
-jaspar_path <- here("ATACseq", "data", "footprinting2", "JASPAR2022_CORE_non-redundant_pfms.meme")
+jaspar_path <- here("ATACseq", "data", "footprinting", "JASPAR2022_CORE_non-redundant_pfms.meme")
 test_df <- read_tsv(jaspar_path, col_names = FALSE)
 all_tf_genes_df <- test_df %>% 
   filter(X1 %>% str_detect("MOTIF")) %>% 
@@ -531,8 +576,89 @@ volcano_df %>%
         axis.ticks.y = element_blank())
 ```
 
+```{r, fig.width = 4, fig.height = 2}
+volcano_df %>%
+  filter(gene != "Klf2") %>% 
+  mutate(signed_log10_q = ifelse(log2FoldChange > 0, 
+                                 -log10(padj), 
+                                 log10(padj))) %>% 
+  mutate(bound_in = factor(bound_in, levels = c(
+    "not in enhancer", 
+    "in enhancer, unbound", 
+    "in enhancer, bound in both", 
+    "in enhancer, bound in prog. only"
+  ))) %>% 
+  filter(bound_in != "in enhancer, unbound") %>% 
+  drop_na(bound_in) %>%
+  ggplot() +
+  aes(bound_in, signed_log10_q) +
+  geom_hline(yintercept = 0, linetype = "dashed", size = 0.2) +
+  geom_errorbar(
+    aes(
+      y = signed_log10_q_mean,
+      ymin = signed_log10_q_mean - signed_log10_q_sd,
+      ymax = signed_log10_q_mean + signed_log10_q_sd,
+      color = bound_in
+    ),
+    data = ~ ..1 %>%
+      group_by(bound_in) %>%
+      summarise_at(
+        c("baseMean", "log2FoldChange", "signed_log10_q"),
+        .funs = c(mean = mean, sd = sd),
+        na.rm = TRUE
+      ),
+    width = 0.5, 
+    size = 0.25
+  ) +
+  geom_errorbar(
+    aes(y = signed_log10_q_mean,
+        ymin = signed_log10_q_mean,
+        ymax = signed_log10_q_mean,
+      color = bound_in),
+    data = ~ ..1 %>%
+      group_by(bound_in) %>%
+      summarise_at(
+        c("baseMean", "log2FoldChange", "signed_log10_q"),
+        .funs = c(mean = mean, sd = sd),
+        na.rm = TRUE
+      ),
+    width = 1, 
+    size = 0.25
+  ) +
+  geom_jitter(
+    aes(
+      shape = is_signif,
+      color = bound_in
+    ),
+    width = 0.3,
+    alpha = 0.3
+  ) +
+  coord_flip() +
+  scale_shape_manual(values = c(4, 19)) +
+  scale_color_manual(values = c("in enhancer, bound in prog. only" = palette_cluster[["progenitor"]], 
+                                "not in enhancer" = "black", 
+                                "in enhancer, bound in both" = "black"))+
+  theme(legend.position = "top", 
+        legend.direction = "vertical", 
+        axis.text = element_text(size = 6), 
+        axis.title = element_text(size = 8), 
+        legend.text = element_text(size = 6), 
+        legend.title = element_text(size = 8), 
+        line = element_line(size = 0.2),
+        legend.spacing = unit(0, "pt"), 
+        axis.line.y = element_blank(), 
+        axis.ticks.y = element_blank()) 
+```
 
+There's one gene that's an outlier that we had to remove. 
 
-
+```{r}
+volcano_df %>%
+  mutate(signed_log10_q = ifelse(log2FoldChange > 0, 
+                                 -log10(padj), 
+                                 log10(padj))) %>% 
+  arrange(signed_log10_q) %>% 
+  head(1)
+```
 
 
