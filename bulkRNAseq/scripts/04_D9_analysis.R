@@ -1,4 +1,4 @@
-# 03_D9_analysis.R
+# 04_D9_analysis.R
 
 library(here)
 library(Seurat)
@@ -173,7 +173,7 @@ write_tsv(results_list$terminal,
 #   filter(padj < 0.05) %>%
 #   View()
 
-read_tsv(here("bulkRNAseq", "results", "dge_D9_progexh_genotype.Enhdel.v.WT.txt")) %>%
-  filter(padj < 0.05) %>%
+# read_tsv(here("bulkRNAseq", "results", "dge_D9_progexh_genotype.Enhdel.v.WT.txt")) %>%
+#   filter(padj < 0.05) %>%
   # filter(gene %>% str_detect("Actb")) %>%
-  View()
+  # View()
