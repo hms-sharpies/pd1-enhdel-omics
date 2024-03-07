@@ -1,0 +1,419 @@
+---
+title: "06_analyze_DEG_and_signatures"
+author: "Amy Huang"
+date: "2024-03-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(here)
+library(Seurat)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(purrr)
+library(stringr)
+library(tibble)
+library(readr)
+library(forcats)
+library(ggrepel)
+library(Matrix.utils)
+# library(DESeq2)
+
+library(ComplexHeatmap)
+library(circlize)
+library(Rsc)
+library(RFunctions)
+
+theme_set(theme_classic())
+```
+
+# Read in data and results 
+
+```{r}
+gene_count_D9_df_filtered <- readRDS(here("bulkRNAseq", "results", "gene_count_D9_df_filtered.rds"))
+gene_count_D30_df_filtered <- readRDS(here("bulkRNAseq", "results", "gene_count_D30_df_filtered.rds"))
+sample_D9_metadata_df <- read_tsv(here("bulkRNAseq", "results", "sample_metadata_D9_df.txt"))
+sample_D30_metadata_df <- read_tsv(here("bulkRNAseq", "results", "sample_metadata_D30_df.txt"))
+```
+
+```{r}
+list.files(here("bulkRNAseq", "results")) %>% str_subset("norm")
+
+norm_counts_D9 <- readRDS(here("bulkRNAseq", "results", "deseq_norm_counts_D9_exh.prog.vs.term.rds")) %>% 
+  as_tibble(rownames = "gene")
+
+norm_counts_D30 <- readRDS(here("bulkRNAseq", "results", "deseq_norm_counts_D30_exh.prog.vs.term.rds")) %>% 
+  as_tibble(rownames = "gene")
+
+# norm_counts_D9 <- readRDS(here("bulkRNAseq", "results", "deseq_norm_counts_D9_all_clusters_genotype.Enhdel.v.WT.rds"))
+```
+
+```{r}
+dge_D30_compare_exh <- read_tsv(here("bulkRNAseq", "results", "dge_D30_exh.prog.vs.term.txt")) # WT
+dge_D9_compare_exh <- read_tsv(here("bulkRNAseq", "results", "dge_D9_exh.prog.vs.term.txt")) # WT
+```
+
+```{r}
+dge_D9_progexh <- read_tsv(here("bulkRNAseq", "results", "dge_D9_progexh_genotype.Enhdel.v.WT.txt"))
+dge_D9_transexh <- read_tsv(here("bulkRNAseq", "results", "dge_D9_transexh_genotype.Enhdel.v.WT.txt"))
+dge_D9_termexh <- read_tsv(here("bulkRNAseq", "results", "dge_D9_termexh_genotype.Enhdel.v.WT.txt"))
+dge_D30_progexh <- read_tsv(here("bulkRNAseq", "results", "dge_D30_progexh_genotype.Enhdel.v.WT.txt"))
+dge_D30_transexh <- read_tsv(here("bulkRNAseq", "results", "dge_D30_transexh_genotype.Enhdel.v.WT.txt"))
+dge_D30_termexh <- read_tsv(here("bulkRNAseq", "results", "dge_D30_termexh_genotype.Enhdel.v.WT.txt"))
+```
+
+```{r}
+sc_dge <- read_tsv(here("scRNAseq", "data", "processed_data_tables", "01_dge.genotype_one-v-one_per-cluster.tsv"))
+```
+
+```{r}
+gs_df <- read_tsv(here("scRNAseq", "data", "gene_signatures",
+                       "02_gene_signatures.msigdbr_H-C2-C7.tsv"))
+
+gs_subset_bp_df <- gs_df %>%
+  filter(str_detect(gs_name, "HALLMARK|REACTOME"))
+length(unique(gs_subset_bp_df$gs_name))
+# 1665
+gs_subset_bp_list <- gs_subset_bp_df %>%
+  named_group_split(gs_name) %>%
+  map(~..1$gene_symbol)
+
+gs_subset_tcell_df <- gs_df %>%
+  filter(str_detect(gs_name, "_T_CELL|TCELL|CD8|CD4|EXH")) %>%
+  filter(str_detect(gs_name, "HALLMARK|REACTOME", negate = T)) %>%
+  filter(str_detect(gs_name, "NEUTROPHIL|MONO|ERYTHROBLAST|DC|NKT|LIN|BCELL|LSK|CD40|CD44|MAST", negate = T))
+length(unique(gs_subset_tcell_df$gs_name))
+# 1446
+gs_subset_tcell_list <- gs_subset_tcell_df %>%
+  named_group_split(gs_name) %>%
+  map(~..1$gene_symbol)
+```
+
+```{r}
+gsea_D9_tcell <- read_tsv(
+  here("bulkRNAseq", "results", "gsea_tcell.exh_wide_D9_genotype.Enhdel.v.WT.txt")
+)
+gsea_D9_bp <- read_tsv(
+  here("bulkRNAseq", "results", "gsea_bp_wide_D9_genotype.Enhdel.v.WT.txt")
+)
+```
+
+# DGE, term vs prog exh
+
+```{r}
+my_plot_volcano <- function(dge_df, label_genes) {
+  dge_df %>% 
+    drop_na(padj) %>% 
+    ggplot() + 
+    aes(log2FoldChange, -log10(padj)) + 
+    geom_point(size = 0.5, alpha = 0.5) + 
+    geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "red") + 
+    geom_point(aes(color = padj < 0.05), 
+               data = ~..1 %>% filter(gene %in% c(label_genes)), 
+               size = 2) + 
+    geom_text_repel(aes(label = gene, color = padj < 0.05), 
+                    data = ~..1 %>% filter(gene %in% c(label_genes)), 
+                    max.overlaps = Inf) + 
+    scale_color_manual(values = c("TRUE" = "red", "FALSE" = "blue")) + 
+    theme(legend.position = "none")
+}
+```
+
+
+```{r, fig.asp = 1, fig.width = 4}
+label_genes <- c("Havcr2", "Slamf6")
+dge_D30_compare_exh %>% 
+  my_plot_volcano(label_genes = label_genes) + 
+  labs(title= "D30")
+
+dge_D9_compare_exh %>% 
+  my_plot_volcano(label_genes = label_genes) + 
+  labs(title= "D9")
+```
+
+```{r}
+# gene list from miller et al 2019
+inh_receptors <- c("Pdcd1", "Havcr2", "Lag3", "Cd244", "Entpd1", "Cd38", "Cd101", "Tigit", "Ctla4")
+surface_receptors <- c("Tnfsf9", "Tnfrsf4", "Il2rb", "Klrg1", "Cd28", "Icos", "Tnfsf14", "Sell", "Il7r")
+eff_molecules <- c("Ifng", "Il10", "Gzma", "Gzmb", "Prf1", "Tnfsf10", "Fasl", "Tnf", "Il2")
+tfs <- c("Nfkb2", "Id2", "Hif1a", "Bach2", "Nfkb1", "Id3", "Tcf7", "Lef1", "Satb1", "Batf", 
+         "Nfatc1", "Prdm1", "Runx1", "Runx3", "Tbx21", "Tox", "Bcl6", "Eomes")
+chemokines <- c("Cx3cr1", "Ccl5", "Ccl4", "Ccl3", "Csf1", "Cxcr5", "Ccr7", "Xcl1", "Cxcl10")
+select_genes <- c(inh_receptors, surface_receptors, eff_molecules, tfs, chemokines)
+```
+
+```{r}
+plot_gene_heatmap <- function(norm_counts, gene_list, 
+                              col_index_ordering = c(3, 6, 9, 11, 2, 5, 8, 10, 1, 4, 7), 
+                              hheight = unit(1.5, "in"), 
+                              hwidth = unit(2, "in")) {
+  h_mtx <-
+    norm_counts %>% 
+    filter(gene %in% gene_list) %>% 
+    column_to_rownames("gene") %>% 
+    as.matrix() %>% 
+    t() %>% 
+    scale() %>% 
+    t() %>% 
+    .[rownames(.)[order(match(rownames(.), gene_list))], 
+      col_index_ordering]
+  Heatmap(
+    h_mtx,
+    width = hwidth, 
+    height = hheight, 
+    col = colorRamp2(colors = c("purple4","yellow"), 
+                       breaks = c(-3, 3)), 
+    name = "row scaled\nnorm counts", 
+    cluster_rows = FALSE, 
+    cluster_columns = FALSE
+  )
+}
+```
+
+```{r, fig.asp = 1, fig.width = 5}
+plot_gene_heatmap(norm_counts_D9, inh_receptors)
+plot_gene_heatmap(norm_counts_D9, surface_receptors)
+plot_gene_heatmap(norm_counts_D9, eff_molecules)
+plot_gene_heatmap(norm_counts_D9, tfs[1:9])
+plot_gene_heatmap(norm_counts_D9, tfs[10:18])
+plot_gene_heatmap(norm_counts_D9, chemokines)
+```
+
+```{r, fig.asp = 2, fig.width = 3}
+plot_gene_heatmap(norm_counts_D30, inh_receptors, c(3, 6, 2, 5, 1, 4), hwidth = unit(1, "in"))
+plot_gene_heatmap(norm_counts_D30, surface_receptors, c(3, 6, 2, 5, 1, 4), hwidth = unit(1, "in"))
+plot_gene_heatmap(norm_counts_D30, eff_molecules, c(3, 6, 2, 5, 1, 4), hwidth = unit(1, "in"))
+plot_gene_heatmap(norm_counts_D30, tfs[1:9], c(3, 6, 2, 5, 1, 4), hwidth = unit(1, "in"))
+plot_gene_heatmap(norm_counts_D30, tfs[10:18], c(3, 6, 2, 5, 1, 4), hwidth = unit(1, "in"))
+plot_gene_heatmap(norm_counts_D30, chemokines, c(3, 6, 2, 5, 1, 4), hwidth = unit(1, "in"))
+```
+
+
+# DGE bw genotypes
+
+```{r, fig.asp = 1, fig.width = 4}
+select_genes <- c("Btg2", "Ctse", "Cxcr4", "Il17ra", "Tnfrsf9")
+dge_D9_progexh %>% my_plot_volcano(label_genes = select_genes) + 
+  labs(title = "D9, prog exh")
+dge_D9_transexh %>% my_plot_volcano(label_genes = select_genes) + 
+  labs(title = "D9, trans exh")
+dge_D9_termexh %>% my_plot_volcano(label_genes = select_genes) + 
+  labs(title = "D9, term exh")
+```
+
+From single cell too: 
+
+```{r, fig.asp = 1/3, fig.width = 9}
+select_genes <- c("Btg2", "Ctse", "Cxcr4", "Il17ra", "Tnfrsf9")
+sc_dge %>%
+  drop_na(p_val_adj) %>% 
+  filter(contrast == "D_W") %>% 
+  filter(Clusters %in% c("terminal", "progenitor", "transitory")) %>% 
+  ggplot() +
+  aes(avg_logFC,-log10(p_val_adj)) +
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_hline(
+    yintercept = -log10(0.05),
+    linetype = "dotted",
+    color = "red"
+  ) +
+  geom_point(aes(color = p_val_adj < 0.05),
+             data = ~ ..1 %>% filter(gene %in% c(select_genes)),
+             size = 2) +
+  geom_text_repel(
+    aes(label = gene, color = p_val_adj < 0.05),
+    data = ~ ..1 %>% filter(gene %in% c(select_genes)),
+    max.overlaps = Inf
+  ) +
+  scale_color_manual(values = c("TRUE" = "red", "FALSE" = "blue")) +
+  theme(legend.position = "none") + 
+  facet_grid(~Clusters) + 
+  theme(strip.background = element_blank()) + 
+  labs(title = "DGE from scRNAseq")
+```
+
+
+```{r, fig.asp = 1, fig.width = 4}
+select_genes <- c("Sell", "Tcf7")
+dge_D9_progexh %>% my_plot_volcano(label_genes = select_genes) + 
+  labs(title = "D9, prog exh")
+dge_D9_transexh %>% my_plot_volcano(label_genes = select_genes) + 
+  labs(title = "D9, trans exh")
+dge_D9_termexh %>% my_plot_volcano(label_genes = select_genes) + 
+  labs(title = "D9, term exh")
+```
+
+
+From single cell too: 
+
+```{r, fig.asp = 1/3, fig.width = 9}
+select_genes <- c("Sell", "Tcf7")
+sc_dge %>%
+  drop_na(p_val_adj) %>% 
+  filter(contrast == "D_W") %>% 
+  filter(Clusters %in% c("terminal", "progenitor", "transitory")) %>% 
+  ggplot() +
+  aes(avg_logFC,-log10(p_val_adj)) +
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_hline(
+    yintercept = -log10(0.05),
+    linetype = "dotted",
+    color = "red"
+  ) +
+  geom_point(aes(color = p_val_adj < 0.05),
+             data = ~ ..1 %>% filter(gene %in% c(select_genes)),
+             size = 2) +
+  geom_text_repel(
+    aes(label = gene, color = p_val_adj < 0.05),
+    data = ~ ..1 %>% filter(gene %in% c(select_genes)),
+    max.overlaps = Inf
+  ) +
+  scale_color_manual(values = c("TRUE" = "red", "FALSE" = "blue")) +
+  theme(legend.position = "none") + 
+  facet_grid(~Clusters) + 
+  theme(strip.background = element_blank()) + 
+  labs(title = "DGE from scRNAseq")
+```
+
+# GSEA
+
+```{r}
+# gsea_res_bp %>%
+#   dplyr::select(gs_name, str_subset(colnames(.), "prog")) %>%
+#   filter(q.val_progexh < 0.05) %>%
+#   arrange(desc(sscore_progexh)) %>%
+#   View()
+# gsea_res_bp %>%
+#   dplyr::select(gs_name, str_subset(colnames(.), "trans")) %>%
+#   filter(q.val_transexh < 0.05) %>%
+#   arrange(sscore_transexh) %>%
+#   View()
+```
+
+```{r}
+dge_list <- list(
+  progenitor = dge_D9_progexh %>% mutate(cluster_id = "progexh"), 
+  transitory = dge_D9_transexh %>% mutate(cluster_id = "transexh"), 
+  terminal = dge_D9_termexh %>% mutate(cluster_id = "termexh")
+)
+dge_df <- dge_list %>%
+  purrr::reduce(bind_rows) %>%
+  mutate(signed_neglog10_p = ifelse(log2FoldChange > 0, -log10(pvalue), log10(pvalue))) %>%
+  drop_na(log2FoldChange, pvalue)
+make_rank_list <- function(.data,
+                           gene = gene,
+                           rank_by = log2FoldChange) {
+  rank_by <- enquo(rank_by)
+  gene <- enquo(gene)
+  data_fc <- .data %>%
+    arrange(desc(!!rank_by))
+  data_fc %>%
+    .[[rlang::as_name(rank_by)]] %>%
+    set_names(data_fc[[rlang::as_name(gene)]])
+}
+rank_lists <- dge_df %>%
+  named_group_split(cluster_id) %>%
+  map(~make_rank_list(..1, rank_by = signed_neglog10_p, gene = gene))
+```
+
+```{r}
+my_plot_gsea_curve <- function(gsea_res, rank_list, gs_subset_list, gs_name_str, exh_cluster) {
+  my_gs <- gsea_res %>%
+    filter(gs_name == gs_name_str)
+  Rsc::get_leading_edge_df(rank_vec = rank_list[[exh_cluster]],
+                           gs_vec = gs_subset_list[[gs_name_str]]) %>%
+    Rsc::plot_gsea_curve(title = paste0(gs_name_str, ", ", exh_cluster)) +
+    theme(legend.position = "none") +
+    annotate(
+      "text",
+      x = Inf,
+      y = Inf,
+      hjust = 1,
+      vjust = 1,
+      label = paste0(
+        "qval=",
+        format(my_gs[[paste0("q.val_", exh_cluster)]], digits = 2),
+        "\n",
+        "sscore=",
+        format(my_gs[[paste0("sscore_", exh_cluster)]], digits = 4)
+      )
+    )
+}
+```
+
+```{r, fig.asp = 1, fig.width = 4}
+my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "REACTOME_CELL_CYCLE", "progexh") + 
+    ylim(-0.3, 0.3)
+my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "REACTOME_CELL_CYCLE", "transexh") + 
+    ylim(-0.3, 0.3)
+my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "REACTOME_CELL_CYCLE", "termexh") + 
+    ylim(-0.3, 0.3)
+```
+
+```{r, fig.asp = 1, fig.width = 4}
+my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "progexh") + 
+    ylim(-0.3, 0.3)
+my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "transexh") + 
+    ylim(-0.3, 0.3)
+my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "termexh") + 
+    ylim(-0.3, 0.3)
+```
+
+
+```{r, fig.asp = 1, fig.width = 4}
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN", "progexh") + 
+  ylim(-0.23, 0.23)
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP", "progexh") + 
+  ylim(-0.23, 0.23)
+
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN", "transexh") + 
+  ylim(-0.23, 0.23)
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP", "transexh")  + 
+  ylim(-0.23, 0.23)
+
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN", "termexh") + 
+  ylim(-0.23, 0.23)
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP", "termexh") + 
+  ylim(-0.23, 0.23)
+```
+
+```{r, fig.asp = 1, fig.width = 4}
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", "progexh") + 
+  ylim(-0.23, 0.23)
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", "progexh") + 
+  ylim(-0.23, 0.23)
+
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", "transexh") + 
+  ylim(-0.23, 0.23)
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", "transexh") + 
+  ylim(-0.23, 0.23)
+
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", "termexh") + 
+  ylim(-0.23, 0.23)
+my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", "termexh") + 
+  ylim(-0.23, 0.23)
+```
+
+
+
+```{r}
+
+# gsea_res_bp_filtered <- gsea_res_bp %>%
+#   filter(q.val_progexh < 0.05 & q.val_transexh < 0.05 &
+#            q.val_termexh < 0.05) %>%
+#   dplyr::select(gs_name, str_subset(colnames(.), "sscore"))
+# View(gsea_res_bp_filtered)
+
+# gsea_res_tcell_filtered <- gsea_res_tcell %>%
+  # filter(q.val_progexh < 0.05 & q.val_transexh < 0.05 &
+  #          q.val_termexh < 0.05) %>%
+  # dplyr::select(gs_name, str_subset(colnames(.), "sscore"))
+# View(gsea_res_tcell_filtered)
+
+```
+
+

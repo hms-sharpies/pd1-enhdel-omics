@@ -9,6 +9,7 @@ library(purrr)
 library(stringr)
 library(tibble)
 library(readr)
+library(forcats)
 library(ggrepel)
 library(Matrix.utils)
 # library(DESeq2)
@@ -129,14 +130,15 @@ gsea_res_tcell <- map_dfr(
   .id = "cluster_id"
 )
 write_tsv(
-  gsea_res_tcell_exh,
+  gsea_res_tcell,
   here("bulkRNAseq", "results", "gsea_tcell_D9_genotype.Enhdel.v.WT.txt")
 )
-gsea_res_tcell_exh_wide <- gsea_res_tcell_exh %>%
+gsea_res_tcell_wide <- gsea_res_tcell %>%
   pivot_wider(id_cols = gs_name,
               names_from = cluster_id,
               values_from = c(p.val, q.val, sscore, edge))
 write_tsv(
-  gsea_res_tcell_exh_wide,
+  gsea_res_tcell_wide,
   here("bulkRNAseq", "results", "gsea_tcell_wide_D9_genotype.Enhdel.v.WT.txt")
 )
+

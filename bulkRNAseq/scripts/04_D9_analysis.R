@@ -34,6 +34,10 @@ de <- DESeqDataSetFromMatrix(counts_mtx,
                                column_to_rownames("sample"),
                              design = formula("~ exh_subset"))
 de <- DESeq2::DESeq(de)
+
+norm_counts <- counts(de, normalized = TRUE)
+saveRDS(norm_counts, here("bulkRNAseq", "results", "deseq_norm_counts_D9_exh.prog.vs.term.rds"))
+
 dge_exh.prog.vs.term <-
   results(de, contrast = c("exh_subset",
                            "Slamf6",
@@ -71,6 +75,10 @@ de <- DESeqDataSetFromMatrix(counts_mtx,
                                column_to_rownames("sample"),
                              design = formula("~ exh_subset"))
 de <- DESeq2::DESeq(de)
+
+norm_counts <- counts(de, normalized = TRUE)
+saveRDS(norm_counts, here("bulkRNAseq", "results", "deseq_norm_counts_D9_enhdel_exh.prog.vs.term.rds"))
+
 dge_exh.prog.vs.term <-
   results(de, contrast = c("exh_subset",
                            "Slamf6",
@@ -119,6 +127,11 @@ de_list <- counts_mtx_list %>%
                            design = formula("~ genotype"))
   })
 de_list <- map(de_list, DESeq2::DESeq)
+
+norm_counts_list <- de_list %>%
+  map_dfr(counts, normalized = TRUE)
+saveRDS(norm_counts_list, here("bulkRNAseq", "results", "deseq_norm_counts_D9_all_clusters_genotype.Enhdel.v.WT.rds"))
+
 results_list <- map(de_list, ~{
   results(..1, name = "genotype_CD4512_vs_CD451") %>%
     as_tibble(rownames = "gene")
@@ -177,3 +190,6 @@ write_tsv(results_list$terminal,
 #   filter(padj < 0.05) %>%
   # filter(gene %>% str_detect("Actb")) %>%
   # View()
+
+# export norm counts ------
+

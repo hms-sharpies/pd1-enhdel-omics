@@ -32,6 +32,10 @@ de <- DESeqDataSetFromMatrix(counts_mtx,
                                column_to_rownames("sample"),
                              design = formula("~ exh_subset"))
 de <- DESeq2::DESeq(de)
+
+norm_counts <- counts(de, normalized = TRUE)
+saveRDS(norm_counts, here("bulkRNAseq", "results", "deseq_norm_counts_D30_exh.prog.vs.term.rds"))
+
 dge_exh.prog.vs.term <-
   results(de, contrast = c("exh_subset",
                          "Slamf6",
@@ -85,6 +89,10 @@ results_list <- map(de_list, ~{
   results(..1, name = "genotype_CD4512_vs_CD451") %>%
     as_tibble(rownames = "gene")
 })
+
+norm_counts_list <- de_list %>%
+  map_dfr(counts, normalized = TRUE)
+saveRDS(norm_counts_list, here("bulkRNAseq", "results", "deseq_norm_counts_D30_all_clusters_genotype.Enhdel.v.WT.rds"))
 
 results_list$progenitor %>%
   # filter(gene %in% c("Pdcd1", "Ifit1", "Cxcl10", "Plac8"))
