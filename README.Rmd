@@ -25,6 +25,7 @@ The associated GEO repository is GSE212507. Additionally, the single cell counts
 
  - `scRNAseq`: directory containing the data and scripts for reproducing scRNA-seq analyses and figures
  - `ATACseq`: directory containing the data and scripts for reproducing ATAC-seq analyses and figures
+ - `bulkRNAseq`: directory containing the data and scripts for reproducing bulk RNA-seq analyses and figures
  - `figures`: directory containing the scripts to reproduce the figures
  - `renv`: directory containing all information for tracking R package versioning and downloads. See [Introduction to renv](https://rstudio.github.io/renv/articles/renv.html) for details
  - `aesthetics.R`: file containing aesthetics and themes for the project
@@ -45,6 +46,7 @@ devtools::install_github("YosefLab/VISION")
 
 3. To reproduce the footprinting analysis, you must also install an appropriate conda environment to run the TOBIAS command line tool. You can do this by [creating a conda environment from the YML file](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file) `tobias3.7_env.yml`. 
 3. Download the single cell counts matrices from the Single Cell Portal and place them in the `scRNAseq/data/counts_matrices` directory. 
+4. Download the bulk RNAseq counts `transcript_counts.tsv` from the Single Cell Portal and place them in the `bulkRNAseq/data` directory. 
 4. For the footprinting analysis, download the ATACseq bam files from the Single Cell Portal and place them in the `ATACseq/data/bams` directory. Also download the compressed directory `footprinting.zip` and place it at `ATACseq/data/footprinting`.
 5. Regenerate all intermediate data tables and objects by running the script `driver.R` and `footprinting.sh`. Warning: It may take a long time, >24 hours depending on compute power, to execute. You can blame the signature scoring script for this; other steps are relatively quick. 
 6. Use Rmarkdown to knit the `.Rmd` files in the `figures/` directory to output the figures in either HTML or PDF format. 
@@ -59,7 +61,7 @@ Alternatively, to bypass the long compute time in step 3, follow the instruction
 * scRNAseq/data/processed_data_objects/00_seurat_workflow.so.rds
 * scRNAseq/data/processed_data_objects/05_pseudobulk.deseq_list.rds
 * ATACseq/data/processed_data_tables/01_analyze.deseq_results_tidy.tsv
-* bulkRNAseq/data/transcript_counts_all_samples.tsv
+* bulkRNAseq/data/transcript_counts.tsv
 
 ## Contact 
 

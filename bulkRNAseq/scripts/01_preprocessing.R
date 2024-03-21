@@ -19,7 +19,7 @@ theme_set(theme_classic() + theme(
   strip.background = element_blank()
 ))
 
-raw_count_df <- read_tsv(here("bulkRNAseq", "data", "transcript_counts_all_samples.tsv"))
+raw_count_df <- read_tsv(here("bulkRNAseq", "data", "transcript_counts.tsv"))
 nrow(raw_count_df)
 
 sample_cols <- raw_count_df %>%
@@ -48,7 +48,8 @@ count_df <- raw_count_df %>%
 
 # there are 150 transcripts with no associated gene
 count_df %>%
-  filter(is.na(gene_name))
+  filter(is.na(gene_name)) %>%
+  nrow()
 
 # make gene_count_df ------
 
@@ -62,7 +63,7 @@ gene_count_df <- count_df %>%
 # filter out genes present in only one sample --------
 
 dim(gene_count_df)
-# 34065 37
+# 34065    25
 
 gene_count_tidy <- gene_count_df %>%
   pivot_longer(cols = all_of(sample_cols),
@@ -75,12 +76,12 @@ rare_genes <- gene_count_tidy %>%
   filter(nneg_n_samples <= 1) %>%
   .$gene_name
 length(rare_genes)
-# 9904
+# 11532
 
 gene_count_df_filtered <- gene_count_df %>%
   filter(!(gene_name %in% rare_genes))
 dim(gene_count_df_filtered)
-#  24161    37
+#  22533    25
 
 gene_count_tidy_filtered <- gene_count_df_filtered %>%
   pivot_longer(cols = all_of(sample_cols),
@@ -106,9 +107,8 @@ pca_df %>%
   geom_point(aes(color = paste(exh_subset, day), shape = genotype),
              size = 3) +
   scale_color_manual(values = c("red4", "red1",
-                                "mediumpurple4", "mediumpurple1",
                                 "aquamarine4","aquamarine1")) +
-  geom_text_repel(aes(label = sample))
+  geom_text_repel(aes(label = sample), max.overlaps = Inf)
 
 # from the PCA, it makes sense to drop S25, which is an outlier.
 # not sure what's up with S24, so we'll keep it for now.
@@ -124,7 +124,7 @@ gene_count_df_filtered2 <- gene_count_df_filtered %>%
 #   head(20) %>%
 #   View()
 
-saveRDS(pca_out, here("bulkRNAseq", "results", "raw_pca_out.rds"))
+saveRDS(pca_out, here("bulkRNAseq", "processed_data_objects", "01_preprocessing.raw_pca_out.rds"))
 
 # Number of genes expressed? -------
 
@@ -154,14 +154,13 @@ rare_genes_D30 <- gene_count_D30_tidy %>%
   filter(nneg_n_samples <= 1) %>%
   .$gene_name
 length(rare_genes_D30)
-# 5178
+# 4334
 
 gene_count_D30_df_filtered <- gene_count_D30_df %>%
   filter(!(gene_name %in% rare_genes_D30)) %>%
   mutate_at(2:ncol(.), as.integer)
 nrow(gene_count_D30_df_filtered)
-# 18983
-
+# 18199
 
 gene_count_D9_df <- gene_count_df_filtered2 %>%
   dplyr::select(gene_name, str_subset(colnames(.), "D9"))
@@ -176,18 +175,18 @@ rare_genes_D9 <- gene_count_D9_tidy %>%
   filter(nneg_n_samples <= 1) %>%
   .$gene_name
 length(rare_genes_D9)
-# 906
+# 1057
 
 gene_count_D9_df_filtered <- gene_count_D9_df %>%
   filter(!(gene_name %in% rare_genes_D9)) %>%
   mutate_at(2:ncol(.), as.integer)
 nrow(gene_count_D9_df_filtered)
-# 23255
+# 21476
 
 # write gene count tables -----
 
-saveRDS(gene_count_D30_df_filtered, here("bulkRNAseq", "results", "gene_count_D30_df_filtered.rds"))
-saveRDS(gene_count_D9_df_filtered, here("bulkRNAseq", "results", "gene_count_D9_df_filtered.rds"))
+write_tsv(gene_count_D30_df_filtered, here("bulkRNAseq", "processed_data_tables", "01_preprocessing.gene_count_D30_df_filtered.txt"))
+write_tsv(gene_count_D9_df_filtered, here("bulkRNAseq", "processed_data_tables", "01_preprocessing.gene_count_D9_df_filtered.txt"))
 
 sample_metadata_D30_df <-
   tibble(sample = colnames(gene_count_D30_df_filtered)[2:ncol(gene_count_D30_df_filtered)]) %>%
@@ -195,7 +194,7 @@ sample_metadata_D30_df <-
            into = c("day", "mice", "genotype", "exh_subset", "sample_num"),
            sep = "_",
            remove = FALSE)
-write_tsv(sample_metadata_D30_df, here("bulkRNAseq", "results", "sample_metadata_D30_df.txt"))
+write_tsv(sample_metadata_D30_df, here("bulkRNAseq", "processed_data_tables", "01_preprocessing.sample_metadata_D30_df.txt"))
 
 sample_metadata_D9_df <-
   tibble(sample = colnames(gene_count_D9_df_filtered)[2:ncol(gene_count_D9_df_filtered)]) %>%
@@ -203,82 +202,4 @@ sample_metadata_D9_df <-
            into = c("day", "mice", "genotype", "exh_subset", "sample_num"),
            sep = "_",
            remove = FALSE)
-write_tsv(sample_metadata_D9_df, here("bulkRNAseq", "results", "sample_metadata_D9_df.txt"))
-
-# Also remove sample 24, re-filter, re-save D30 -------
-
-gene_count_df_filtered3 <- gene_count_df_filtered2 %>%
-  dplyr::select(-str_subset(colnames(.), "S24"))
-
-gene_count_D30_df <- gene_count_df_filtered3 %>%
-  dplyr::select(gene_name, str_subset(colnames(.), "D30"))
-
-gene_count_D30_tidy <- gene_count_D30_df %>%
-  pivot_longer(cols = 2:ncol(.),
-               names_to = "sample",
-               values_to = "count")
-rare_genes_D30 <- gene_count_D30_tidy %>%
-  group_by(gene_name) %>%
-  summarise(nneg_n_samples = sum(count > 0)) %>%
-  filter(nneg_n_samples <= 1) %>%
-  .$gene_name
-length(rare_genes_D30)
-# 5329
-
-gene_count_D30_df_filtered <- gene_count_D30_df %>%
-  filter(!(gene_name %in% rare_genes_D30)) %>%
-  mutate_at(2:ncol(.), as.integer)
-nrow(gene_count_D30_df_filtered)
-# 18832
-
-saveRDS(gene_count_D30_df_filtered, here("bulkRNAseq", "results", "gene_count_D30_df_filtered_removeS24.rds"))
-
-sample_metadata_D30_df <-
-  tibble(sample = colnames(gene_count_D30_df_filtered)[2:ncol(gene_count_D30_df_filtered)]) %>%
-  separate(sample,
-           into = c("day", "mice", "genotype", "exh_subset", "sample_num"),
-           sep = "_",
-           remove = FALSE)
-write_tsv(sample_metadata_D30_df, here("bulkRNAseq", "results", "sample_metadata_D30_df_removeS24.txt"))
-
-
-# Redo PCA and save loadings ---------
-
-gene_count_df_filtered3_tidy <- gene_count_df_filtered3 %>%
-  pivot_longer(cols = 2:ncol(.),
-               names_to = "sample",
-               values_to = "count")
-rare_genes <- gene_count_df_filtered3_tidy %>%
-  group_by(gene_name) %>%
-  summarise(nneg_n_samples = sum(count > 0)) %>%
-  filter(nneg_n_samples <= 1) %>%
-  .$gene_name
-length(rare_genes)
-# 84
-
-gene_count_df_filtered4 <- gene_count_df_filtered3 %>%
-  filter(!(gene_name %in% rare_genes)) %>%
-  mutate_at(2:ncol(.), as.integer)
-nrow(gene_count_df_filtered4)
-# 24077
-#
-# pca_out <- gene_count_df_filtered4 %>%
-#   column_to_rownames("gene_name") %>%
-#   t() %>%
-#   prcomp(scale = T)
-#
-# pca_df <- pca_out$x %>%
-#   as_tibble(rownames = "sample") %>%
-#   separate(sample,
-#            into = c("day", "mice", "genotype", "exh_subset", "sample"),
-#            sep = "_",
-#            remove = FALSE)
-# pca_df %>%
-#   ggplot() +
-#   aes(PC1, PC2) +
-#   geom_point(aes(color = paste(exh_subset, day), shape = genotype),
-#              size = 3) +
-#   scale_color_manual(values = c("red4", "red1",
-#                                 "mediumpurple4", "mediumpurple1",
-#                                 "aquamarine4","aquamarine1")) +
-#   geom_text_repel(aes(label = sample))
+write_tsv(sample_metadata_D9_df, here("bulkRNAseq", "processed_data_tables", "01_preprocessing.sample_metadata_D9_df.txt"))

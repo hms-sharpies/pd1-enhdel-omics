@@ -35,18 +35,12 @@ theme_set(theme_classic())
 # Read in data and results 
 
 ```{r}
-gene_count_D9_df_filtered <- readRDS(here("bulkRNAseq", "results", "gene_count_D9_df_filtered.rds"))
-sample_D9_metadata_df <- read_tsv(here("bulkRNAseq", "results", "sample_metadata_D9_df.txt"))
+gene_count_D9_df_filtered <- read_tsv(here("bulkRNAseq", "processed_data_tables", "01_preprocessing.gene_count_D9_df_filtered.txt"))
+sample_D9_metadata_df <- read_tsv(here("bulkRNAseq", "processed_data_tables", "01_preprocessing.sample_metadata_D9_df.txt"))
+gsea_D9_tcell <- read_tsv(here("bulkRNAseq", "processed_data_tables", "03_D9_signatures.gsea_tcell_D9_genotype.Enhdel.v.WT.txt"))
+gsea_D9_bp <- read_tsv(here("bulkRNAseq", "processed_data_tables", "03_D9_signatures.gsea_bp_D9_genotype.Enhdel.v.WT.txt"))
 ```
 
-```{r}
-gsea_D9_tcell <- read_tsv(
-  here("bulkRNAseq", "results", "gsea_tcell_D9_genotype.Enhdel.v.WT.txt")
-)
-gsea_D9_bp <- read_tsv(
-  here("bulkRNAseq", "results", "gsea_bp_D9_genotype.Enhdel.v.WT.txt")
-)
-```
 
 ```{r}
 gsea_sc_all <- read_tsv(
@@ -59,8 +53,8 @@ sc_dge <- read_tsv(here("scRNAseq", "data", "processed_data_tables", "01_dge.gen
   filter(Clusters %in% c("terminal", "progenitor")) %>% 
   filter(contrast == "D_W")
 
-dge_D9_progexh <- read_tsv(here("bulkRNAseq", "results", "dge_D9_progexh_genotype.Enhdel.v.WT.txt"))
-dge_D9_termexh <- read_tsv(here("bulkRNAseq", "results", "dge_D9_termexh_genotype.Enhdel.v.WT.txt"))
+dge_D9_progexh <- read_tsv(here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.dge_progexh_genotype.Enhdel.v.WT.txt"))
+dge_D9_termexh <- read_tsv(here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.dge_termexh_genotype.Enhdel.v.WT.txt"))
 dge_list <- list(
   progenitor = dge_D9_progexh %>% mutate(Clusters = "progenitor"), 
   terminal = dge_D9_termexh %>% mutate(Clusters = "terminal")
@@ -197,50 +191,8 @@ gsea_df <- gsea_D9_harmonized %>%
 ```
 
 ```{r}
-gsea_df %>% saveRDS(here("bulkRNAseq", "results", "gsea_sc.bulk.harmonized.rds"))
+saveRDS(gsea_df, here("bulkRNAseq", "processed_data_objects", "04_compare_w_D30_sc.gsea_sc.bulk.harmonized.rds"))
 ```
-
-
-## pct overlap / pvalue cutoff
-
-```{r}
-top_n_pct_tbl <- gsea_df %>% 
-  filter(Clusters == "progenitor") %>% 
-  mutate(top_n_pct.sc30 = sscore.sc30 > stats::quantile(sscore.sc30, 0.9)) %>% 
-  mutate(top_n_pct.bulk9 = sscore.bulk9 > stats::quantile(sscore.bulk9, 0.9)) %>% 
-  group_by(top_n_pct.sc30, top_n_pct.bulk9) %>% 
-  summarise(count = n()) %>% 
-  pivot_wider(id_cols = top_n_pct.sc30, 
-              names_from = top_n_pct.bulk9, 
-              values_from = count)
-top_n_pct_tbl
-```
-
-```{r}
-top_n_pct_tbl %>% 
-  column_to_rownames("top_n_pct.sc30") %>% 
-  fisher.test()
-```
-
-```{r}
-signif_tbl <- gsea_df %>% 
-  filter(Clusters == "progenitor") %>% 
-  mutate(signif_up.sc30 = sscore.sc30 > 0 & q.val.sc30 < 0.05) %>% 
-  mutate(signif_up.bulk9 = sscore.bulk9 > 0 & q.val.bulk9 < 0.05) %>% 
-  group_by(signif_up.sc30, signif_up.bulk9) %>% 
-  summarise(count = n()) %>% 
-  pivot_wider(id_cols = signif_up.sc30, 
-              names_from = signif_up.bulk9, 
-              values_from = count)
-signif_tbl
-```
-
-```{r}
-signif_tbl %>% 
-  column_to_rownames("signif_up.sc30") %>% 
-  fisher.test()
-```
-
 
 ## visual
 

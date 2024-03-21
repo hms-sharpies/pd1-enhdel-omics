@@ -403,7 +403,7 @@ gene_expr_tidy <-
   pivot_longer(cols = all_of(off_target_genes))
 ```
 
-```{r, fig.width = 3.5, fig.height = 1.5}
+```{r, fig.width = 4, fig.height = 2}
 gene_expr_tidy %>% 
   filter(genotype != "K") %>% 
   filter(cluster_ids != "dividing") %>% 
@@ -429,15 +429,48 @@ gene_expr_tidy %>%
 # Early timepoint bulk RNAseq
 
 ```{r}
-gsea_harmonized_df <- 
-  readRDS(here("bulkRNAseq", "results", "gsea_sc.bulk.harmonized.rds"))
+
+gsea_harmonized_df <- readRDS(here("bulkRNAseq", "processed_data_objects", "04_compare_w_D30_sc.gsea_sc.bulk.harmonized.rds"))
 gsea_bulk9_df <-
   gsea_harmonized_df %>%
   dplyr::select(gs_name, Clusters, str_subset(colnames(.), "bulk9"))
 colnames(gsea_bulk9_df) <- str_remove(colnames(gsea_bulk9_df), "\\.bulk9")
 
-dge_bulk_df <- readRDS(here("bulkRNAseq", "results", "dge_df.rds"))
+
+dge_D9_progexh <- read_tsv(here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.dge_progexh_genotype.Enhdel.v.WT.txt"))
+dge_D9_termexh <- read_tsv(here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.dge_termexh_genotype.Enhdel.v.WT.txt"))
+dge_list <- list(
+  progenitor = dge_D9_progexh %>% mutate(cluster_id = "progexh"), 
+  terminal = dge_D9_termexh %>% mutate(cluster_id = "termexh")
+)
+dge_bulk_df <- dge_list %>%
+  purrr::reduce(bind_rows) %>%
+  mutate(signed_neglog10_p = ifelse(log2FoldChange > 0, -log10(pvalue), log10(pvalue))) %>%
+  drop_na(log2FoldChange, pvalue)
 ```
+
+## PCA
+
+```{r}
+pca_out <- readRDS(here("bulkRNAseq", "processed_data_objects", "01_preprocessing.raw_pca_out.rds"))
+
+
+pca_df <- pca_out$x %>%
+  as_tibble(rownames = "sample") %>%
+  separate(sample,
+           into = c("day", "mice", "genotype", "exh_subset", "sample"),
+           sep = "_",
+           remove = FALSE)
+pca_df %>%
+  ggplot() +
+  aes(PC1, PC2) +
+  geom_point(aes(color = paste(exh_subset, day), shape = genotype),
+             size = 3) +
+  scale_color_manual(values = c("red4", "red1",
+                                "aquamarine4","aquamarine1")) +
+  geom_text_repel(aes(label = sample), max.overlaps = Inf)
+```
+
 
 ## GSEA
 
@@ -460,7 +493,8 @@ rank_lists <- dge_bulk_df %>%
 
 ### HALLMARK_OXIDATIVE_PHOSPHORYLATION
 
-```{r}
+```{r, fig.width = 3, fig.height = 2}
+
 oxphos_genes <- gene_sig_df %>% 
   filter(gs_name == "HALLMARK_OXIDATIVE_PHOSPHORYLATION") %>% 
   .$gene_symbol
@@ -484,7 +518,7 @@ Rsc::get_leading_edge_df(rank_lists$termexh, gs_vec = oxphos_genes) %>%
 
 ### GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP
 
-```{r}
+```{r, fig.height = 2, fig.width = 3}
 exh_genes <- gene_sig_df %>% 
   filter(gs_name == "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP") %>% 
   .$gene_symbol
@@ -501,6 +535,75 @@ Rsc::get_leading_edge_df(rank_lists$termexh, gs_vec = exh_genes) %>%
                          annotate_df = gsea_bulk9_df %>% 
                            filter(Clusters == "terminal") %>% 
                            filter(gs_name == "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP"), 
+                         text_size = 3, 
+                         pt_size = 1)
+```
+
+### GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN
+
+```{r, fig.height = 2, fig.width = 3}
+exh_genes <- gene_sig_df %>% 
+  filter(gs_name == "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN") %>% 
+  .$gene_symbol
+
+Rsc::get_leading_edge_df(rank_lists$progexh, gs_vec = exh_genes) %>%
+  plot_gsea_curve_pretty("progenitor", show.legend = FALSE, 
+                         annotate_df = gsea_bulk9_df %>% 
+                           filter(Clusters == "progenitor") %>% 
+                           filter(gs_name == "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN"), 
+                         text_size = 3, 
+                         pt_size = 1)
+Rsc::get_leading_edge_df(rank_lists$termexh, gs_vec = exh_genes) %>%
+  plot_gsea_curve_pretty("terminal", show.legend = FALSE, 
+                         annotate_df = gsea_bulk9_df %>% 
+                           filter(Clusters == "terminal") %>% 
+                           filter(gs_name == "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN"), 
+                         text_size = 3, 
+                         pt_size = 1)
+```
+
+### GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP
+
+```{r, fig.height = 2, fig.width = 3}
+exh_genes <- gene_sig_df %>% 
+  filter(gs_name == "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP") %>% 
+  .$gene_symbol
+
+Rsc::get_leading_edge_df(rank_lists$progexh, gs_vec = exh_genes) %>%
+  plot_gsea_curve_pretty("progenitor", show.legend = FALSE, 
+                         annotate_df = gsea_bulk9_df %>% 
+                           filter(Clusters == "progenitor") %>% 
+                           filter(gs_name == "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP"), 
+                         text_size = 3, 
+                         pt_size = 1)
+Rsc::get_leading_edge_df(rank_lists$termexh, gs_vec = exh_genes) %>%
+  plot_gsea_curve_pretty("terminal", show.legend = FALSE, 
+                         annotate_df = gsea_bulk9_df %>% 
+                           filter(Clusters == "terminal") %>% 
+                           filter(gs_name == "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP"), 
+                         text_size = 3, 
+                         pt_size = 1)
+```
+
+### GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN
+
+```{r, fig.height = 2, fig.width = 3}
+exh_genes <- gene_sig_df %>% 
+  filter(gs_name == "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN") %>% 
+  .$gene_symbol
+
+Rsc::get_leading_edge_df(rank_lists$progexh, gs_vec = exh_genes) %>%
+  plot_gsea_curve_pretty("progenitor", show.legend = FALSE, 
+                         annotate_df = gsea_bulk9_df %>% 
+                           filter(Clusters == "progenitor") %>% 
+                           filter(gs_name == "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN"), 
+                         text_size = 3, 
+                         pt_size = 1)
+Rsc::get_leading_edge_df(rank_lists$termexh, gs_vec = exh_genes) %>%
+  plot_gsea_curve_pretty("terminal", show.legend = FALSE, 
+                         annotate_df = gsea_bulk9_df %>% 
+                           filter(Clusters == "terminal") %>% 
+                           filter(gs_name == "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN"), 
                          text_size = 3, 
                          pt_size = 1)
 ```

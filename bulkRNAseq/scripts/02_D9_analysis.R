@@ -1,4 +1,4 @@
-# 02_D30_analysis.R
+# 02_D9_analysis.R
 
 library(here)
 library(Seurat)
@@ -17,13 +17,13 @@ library(scattermore)
 
 # read in -------
 
-gene_count_D30_df_filtered <- read_tsv(here("bulkRNAseq", "processed_data_tables", "01_preprocessing.gene_count_D30_df_filtered.txt")) %>%
+gene_count_D9_df_filtered <- read_tsv(here("bulkRNAseq", "processed_data_tables", "01_preprocessing.gene_count_D9_df_filtered.txt")) %>%
   mutate_at(2:ncol(.), as.integer)
-sample_metadata_df <- read_tsv(here("bulkRNAseq", "processed_data_tables", "01_preprocessing.sample_metadata_D30_df.txt"))
+sample_metadata_df <- read_tsv(here("bulkRNAseq", "processed_data_tables", "01_preprocessing.sample_metadata_D9_df.txt"))
 
 # WT, Prog vs Term ---------
 
-counts_mtx <- gene_count_D30_df_filtered %>%
+counts_mtx <- gene_count_D9_df_filtered %>%
   dplyr::select(gene_name, str_subset(colnames(.), "CD4512")) %>%
   column_to_rownames("gene_name") %>%
   as.matrix()
@@ -35,7 +35,7 @@ de <- DESeqDataSetFromMatrix(counts_mtx,
 de <- DESeq2::DESeq(de)
 
 norm_counts <- as.data.frame(counts(de, normalized = TRUE))
-write_tsv(norm_counts, here("bulkRNAseq", "processed_data_tables", "02_D30_analysis.deseq_norm_counts_exh.prog.vs.term.txt"))
+write_tsv(norm_counts, here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.deseq_norm_counts_exh.prog.vs.term.txt"))
 
 dge_exh.prog.vs.term <-
   results(de, contrast = c("exh_subset",
@@ -58,16 +58,16 @@ dge_exh.prog.vs.term %>%
                   data = ~..1 %>% filter(gene %in% c("Havcr2", "Slamf6")))
 # okay great, slamf6 and havcr2 appear in the correct directions here
 
-write_tsv(dge_exh.prog.vs.term, here("bulkRNAseq", "processed_data_tables", "02_D30_analysis.dge_exh.prog.vs.term.txt"))
+write_tsv(dge_exh.prog.vs.term, here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.dge_exh.prog.vs.term.txt"))
 
 # Within subset, enhdel vs WT -------
 
 counts_mtx_list <- list()
-counts_mtx_list[["progenitor"]] <- gene_count_D30_df_filtered %>%
+counts_mtx_list[["progenitor"]] <- gene_count_D9_df_filtered %>%
   dplyr::select(gene_name, str_subset(colnames(.), "Slamf6")) %>%
   column_to_rownames("gene_name") %>%
   as.matrix()
-counts_mtx_list[["terminal"]] <- gene_count_D30_df_filtered %>%
+counts_mtx_list[["terminal"]] <- gene_count_D9_df_filtered %>%
   dplyr::select(gene_name, str_subset(colnames(.), "CX3CR6Neg")) %>%
   column_to_rownames("gene_name") %>%
   as.matrix()
@@ -90,10 +90,10 @@ norm_counts_df <- de_list %>%
   map(counts, normalized = TRUE) %>%
   map(as.data.frame) %>%
   purrr::reduce(bind_cols)
-write_tsv(norm_counts_df, here("bulkRNAseq", "processed_data_tables", "02_D30_analysis.deseq_norm_counts_all_clusters_genotype.Enhdel.v.WT.txt"))
+write_tsv(norm_counts_df, here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.deseq_norm_counts_all_clusters_genotype.Enhdel.v.WT.txt"))
 
 write_tsv(results_list$progenitor,
-          here("bulkRNAseq", "processed_data_tables", "02_D30_analysis.dge_progexh_genotype.Enhdel.v.WT.txt"))
+          here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.dge_progexh_genotype.Enhdel.v.WT.txt"))
 write_tsv(results_list$terminal,
-          here("bulkRNAseq", "processed_data_tables", "02_D30_analysis.dge_D9_termexh_genotype.Enhdel.v.WT.txt"))
+          here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.dge_termexh_genotype.Enhdel.v.WT.txt"))
 

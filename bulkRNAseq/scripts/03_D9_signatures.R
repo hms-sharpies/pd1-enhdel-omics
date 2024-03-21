@@ -12,26 +12,15 @@ library(readr)
 library(forcats)
 library(ggrepel)
 library(Matrix.utils)
-# library(DESeq2)
 
 theme_set(theme_classic())
-# source(here("helper.R"))
-
-# named_group_split
-# credit goes to romainfrancois on https://github.com/tidyverse/dplyr/issues/4223
-named_group_split <- function(.tbl, ...) {
-  grouped <- group_by(.tbl, ...)
-  names <- rlang::inject(paste(!!!group_keys(grouped), sep = " / "))
-
-  grouped %>%
-    group_split() %>%
-    rlang::set_names(names)
-}
+source(here("helper.R"))
 
 # read in -------
 
-gene_count_D9_df_filtered <- readRDS(here("bulkRNAseq", "results", "gene_count_D9_df_filtered.rds"))
-sample_metadata_df <- read_tsv(here("bulkRNAseq", "results", "sample_metadata_D9_df.txt"))
+gene_count_D9_df_filtered <- read_tsv(here("bulkRNAseq", "processed_data_tables", "01_preprocessing.gene_count_D9_df_filtered.txt"))%>%
+  mutate_at(2:ncol(.), as.integer)
+sample_metadata_df <- read_tsv(here("bulkRNAseq", "processed_data_tables", "01_preprocessing.sample_metadata_D9_df.txt"))
 
 gs_df <- read_tsv(here("scRNAseq", "data", "gene_signatures",
                        "02_gene_signatures.msigdbr_H-C2-C7.tsv"))
@@ -56,13 +45,10 @@ gs_subset_tcell_list <- gs_subset_tcell_df %>%
 
 dge_list <- list()
 dge_list[["progenitor"]] <- read_tsv(
-  here("bulkRNAseq", "results", "dge_D9_progexh_genotype.Enhdel.v.WT.txt")
+  here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.dge_progexh_genotype.Enhdel.v.WT.txt")
 ) %>% mutate(cluster_id = "progexh")
-dge_list[["transitory"]] <- read_tsv(
-  here("bulkRNAseq", "results", "dge_D9_transexh_genotype.Enhdel.v.WT.txt")
-) %>% mutate(cluster_id = "transexh")
 dge_list[["terminal"]] <- read_tsv(
-  here("bulkRNAseq", "results", "dge_D9_termexh_genotype.Enhdel.v.WT.txt")
+  here("bulkRNAseq", "processed_data_tables", "02_D9_analysis.dge_termexh_genotype.Enhdel.v.WT.txt")
 ) %>% mutate(cluster_id = "termexh")
 dge_df <- dge_list %>%
   purrr::reduce(bind_rows) %>%
@@ -109,7 +95,7 @@ gsea_res_bp <- map_dfr(
 )
 write_tsv(
   gsea_res_bp,
-  here("bulkRNAseq", "results", "gsea_bp_D9_genotype.Enhdel.v.WT.txt")
+  here("bulkRNAseq", "processed_data_tables", "03_D9_signatures.gsea_bp_D9_genotype.Enhdel.v.WT.txt")
 )
 gsea_res_bp_wide <- gsea_res_bp %>%
   pivot_wider(id_cols = gs_name,
@@ -117,7 +103,7 @@ gsea_res_bp_wide <- gsea_res_bp %>%
               values_from = c(p.val, q.val, sscore, edge))
 write_tsv(
   gsea_res_bp_wide,
-  here("bulkRNAseq", "results", "gsea_bp_wide_D9_genotype.Enhdel.v.WT.txt")
+  here("bulkRNAseq", "processed_data_tables", "03_D9_signatures.gsea_bp_wide_D9_genotype.Enhdel.v.WT.txt")
 )
 
 gsea_res_tcell <- map_dfr(
@@ -131,7 +117,7 @@ gsea_res_tcell <- map_dfr(
 )
 write_tsv(
   gsea_res_tcell,
-  here("bulkRNAseq", "results", "gsea_tcell_D9_genotype.Enhdel.v.WT.txt")
+  here("bulkRNAseq", "processed_data_tables", "03_D9_signatures.gsea_tcell_D9_genotype.Enhdel.v.WT.txt")
 )
 gsea_res_tcell_wide <- gsea_res_tcell %>%
   pivot_wider(id_cols = gs_name,
@@ -139,6 +125,6 @@ gsea_res_tcell_wide <- gsea_res_tcell %>%
               values_from = c(p.val, q.val, sscore, edge))
 write_tsv(
   gsea_res_tcell_wide,
-  here("bulkRNAseq", "results", "gsea_tcell_wide_D9_genotype.Enhdel.v.WT.txt")
+  here("bulkRNAseq", "processed_data_tables", "03_D9_signatures.gsea_tcell_wide_D9_genotype.Enhdel.v.WT.txt")
 )
 
