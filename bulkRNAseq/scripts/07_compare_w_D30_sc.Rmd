@@ -1,0 +1,336 @@
+---
+title: "Compare D9 bulk to D30 sc, heatmap"
+author: "Amy Huang"
+date: "2024-03-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+
+library(here)
+library(Seurat)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(purrr)
+library(stringr)
+library(tibble)
+library(readr)
+library(forcats)
+library(ggrepel)
+library(Matrix.utils)
+# library(DESeq2)
+library(ggpubr)
+
+library(ComplexHeatmap)
+library(circlize)
+library(Rsc)
+library(RFunctions)
+
+theme_set(theme_classic())
+```
+
+# Read in data and results 
+
+```{r}
+gene_count_D9_df_filtered <- readRDS(here("bulkRNAseq", "results", "gene_count_D9_df_filtered.rds"))
+sample_D9_metadata_df <- read_tsv(here("bulkRNAseq", "results", "sample_metadata_D9_df.txt"))
+```
+
+```{r}
+gsea_D9_tcell <- read_tsv(
+  here("bulkRNAseq", "results", "gsea_tcell_D9_genotype.Enhdel.v.WT.txt")
+)
+gsea_D9_bp <- read_tsv(
+  here("bulkRNAseq", "results", "gsea_bp_D9_genotype.Enhdel.v.WT.txt")
+)
+```
+
+```{r}
+gsea_sc_all <- read_tsv(
+  here("scRNAseq", "data", "processed_data_tables", "03_gsea.genotype_one-v-one_per-cluster_log2FC.tsv")
+)
+```
+
+```{r}
+sc_dge <- read_tsv(here("scRNAseq", "data", "processed_data_tables", "01_dge.genotype_one-v-one_per-cluster.tsv")) %>% 
+  filter(Clusters %in% c("terminal", "progenitor")) %>% 
+  filter(contrast == "D_W")
+
+dge_D9_progexh <- read_tsv(here("bulkRNAseq", "results", "dge_D9_progexh_genotype.Enhdel.v.WT.txt"))
+dge_D9_termexh <- read_tsv(here("bulkRNAseq", "results", "dge_D9_termexh_genotype.Enhdel.v.WT.txt"))
+dge_list <- list(
+  progenitor = dge_D9_progexh %>% mutate(Clusters = "progenitor"), 
+  terminal = dge_D9_termexh %>% mutate(Clusters = "terminal")
+)
+dge_D9_df <- purrr::reduce(dge_list, bind_rows) %>% 
+  dplyr::relocate(Clusters)
+
+dge_df <- inner_join(dge_D9_df, sc_dge, by = c("Clusters", "gene")) %>% 
+  drop_na(pvalue) %>% 
+  drop_na(baseMean) %>% 
+  mutate(neglog10p.sc30 = ifelse(avg_logFC > 0, 
+                                 -log10(p_val), 
+                                 log10(p_val))) %>% 
+  mutate(neglog10p.bulk9 = ifelse(log2FoldChange > 0, 
+                                  -log10(pvalue), 
+                                  log10(pvalue))) %>% 
+  group_by(Clusters) %>% 
+  arrange(desc(neglog10p.sc30), desc(avg_logFC)) %>% 
+  mutate(rank.sc30 = row_number()) %>% 
+  arrange(desc(neglog10p.bulk9), desc(log2FoldChange)) %>% 
+  mutate(rank.bulk9 = row_number()) %>% 
+  ungroup()
+```
+
+# dge Heatmap
+
+```{r}
+dge_df %>% 
+  filter(Clusters == "progenitor") %>% 
+  ggplot() + 
+  aes(rank.sc30, rank.bulk9) +
+  geom_density_2d_filled() + 
+  geom_point(size = 0.4, color = "white")
+```
+
+```{r, fig.asp = 1.5, fig.width = 3}
+h_mtx_df <- dge_df %>% 
+  filter(Clusters == "progenitor") %>% 
+  arrange(rank.sc30) %>% 
+  dplyr::select(gene, rank.sc30, rank.bulk9)
+h_mtx <- h_mtx_df %>% 
+  column_to_rownames("gene") %>% 
+  as.matrix()
+
+gs_name_label <- c("Klrg1", "Ctse", "Klrd1", "Gzmb", 
+                   "Cxcl10", "Ifit1")
+indices <- map_int(gs_name_label, ~which(rownames(h_mtx) == ..1)[1])
+ha <- rowAnnotation(
+  gs_name = anno_mark(at = indices, labels = gs_name_label, 
+                      side = "left")
+)
+ha2 <- rowAnnotation(
+  gs_name = anno_mark(at = indices, labels = h_mtx_df$rank.bulk9[indices], 
+                      side = "right")
+)
+h <- Heatmap(
+  h_mtx,
+  name = "rank\n(by pval,\nlogFC)", 
+  col = colorRamp2(breaks = c(0, nrow(h_mtx)/2, nrow(h_mtx)),
+                   colors = c("#007FFF", "white", "grey20")),
+  show_row_names = FALSE,
+  cluster_rows = FALSE,
+  cluster_columns = FALSE, 
+  left_annotation = ha, 
+  right_annotation = ha2
+)
+draw(h, column_title = "Progenitor exhausted")
+```
+
+```{r, fig.asp = 1.5, fig.width = 3}
+h_mtx_df <- dge_df %>% 
+  filter(Clusters == "terminal") %>% 
+  arrange(rank.sc30) %>% 
+  dplyr::select(gene, rank.sc30, rank.bulk9)
+h_mtx <- h_mtx_df %>% 
+  column_to_rownames("gene") %>% 
+  as.matrix()
+
+gs_name_label <- c("Klrg1", "Ctse", "Klrd1", "Gzmb", 
+                   "Cxcl10", "Ifit1")
+indices <- map_int(gs_name_label, ~which(rownames(h_mtx) == ..1)[1])
+ha <- rowAnnotation(
+  gs_name = anno_mark(at = indices, labels = gs_name_label, 
+                      side = "left")
+)
+ha2 <- rowAnnotation(
+  gs_name = anno_mark(at = indices, labels = h_mtx_df$rank.bulk9[indices], 
+                      side = "right")
+)
+h <- Heatmap(
+  h_mtx,
+  name = "rank\n(by pval,\nlogFC)", 
+  col = colorRamp2(breaks = c(0, nrow(h_mtx)/2, nrow(h_mtx)),
+                   colors = c("#007FFF", "white", "grey20")),
+  show_row_names = FALSE,
+  cluster_rows = FALSE,
+  cluster_columns = FALSE, 
+  left_annotation = ha, 
+  right_annotation = ha2
+)
+draw(h, column_title = "Terminal exhausted")
+```
+
+# GSEA Heatmap
+
+## Harmonize bulk and sc gsea lists
+
+```{r}
+gsea_D9 <- bind_rows(gsea_D9_bp, gsea_D9_tcell)
+gsea_D9_harmonized <- gsea_D9 %>% 
+  mutate(Clusters = case_when(
+    cluster_id == "progexh" ~ "progenitor", 
+    cluster_id == "termexh" ~ "terminal"
+  )) %>% 
+  relocate(Clusters) %>% 
+  dplyr::select(-cluster_id) %>% 
+  mutate(neglog10_p = ifelse(sscore > 0, -log10(p.val), log10(p.val))) 
+```
+
+```{r}
+gsea_sc_harmonized <- gsea_sc_all %>% 
+  filter(Clusters %in% c("terminal", "progenitor")) %>% 
+  filter(contrast == "D_W") %>% 
+  dplyr::select(-contrast) %>% 
+  mutate(neglog10_p = ifelse(sscore > 0, -log10(p.val), log10(p.val))) 
+```
+
+```{r}
+gsea_df <- gsea_D9_harmonized %>% 
+  left_join(gsea_sc_harmonized, 
+            by = c("Clusters", "gs_name"), 
+            suffix = c(".bulk9", ".sc30")) %>% 
+  drop_na(p.val.sc30) 
+```
+
+```{r}
+gsea_df %>% saveRDS(here("bulkRNAseq", "results", "gsea_sc.bulk.harmonized.rds"))
+```
+
+
+## pct overlap / pvalue cutoff
+
+```{r}
+top_n_pct_tbl <- gsea_df %>% 
+  filter(Clusters == "progenitor") %>% 
+  mutate(top_n_pct.sc30 = sscore.sc30 > stats::quantile(sscore.sc30, 0.9)) %>% 
+  mutate(top_n_pct.bulk9 = sscore.bulk9 > stats::quantile(sscore.bulk9, 0.9)) %>% 
+  group_by(top_n_pct.sc30, top_n_pct.bulk9) %>% 
+  summarise(count = n()) %>% 
+  pivot_wider(id_cols = top_n_pct.sc30, 
+              names_from = top_n_pct.bulk9, 
+              values_from = count)
+top_n_pct_tbl
+```
+
+```{r}
+top_n_pct_tbl %>% 
+  column_to_rownames("top_n_pct.sc30") %>% 
+  fisher.test()
+```
+
+```{r}
+signif_tbl <- gsea_df %>% 
+  filter(Clusters == "progenitor") %>% 
+  mutate(signif_up.sc30 = sscore.sc30 > 0 & q.val.sc30 < 0.05) %>% 
+  mutate(signif_up.bulk9 = sscore.bulk9 > 0 & q.val.bulk9 < 0.05) %>% 
+  group_by(signif_up.sc30, signif_up.bulk9) %>% 
+  summarise(count = n()) %>% 
+  pivot_wider(id_cols = signif_up.sc30, 
+              names_from = signif_up.bulk9, 
+              values_from = count)
+signif_tbl
+```
+
+```{r}
+signif_tbl %>% 
+  column_to_rownames("signif_up.sc30") %>% 
+  fisher.test()
+```
+
+
+## visual
+
+```{r}
+gsea_df_ranked <- gsea_df %>% 
+  group_by(Clusters) %>% 
+  arrange(desc(neglog10_p.bulk9), desc(sscore.bulk9)) %>% 
+  mutate(rank.bulk9 = row_number()) %>% 
+  arrange(desc(neglog10_p.sc30), desc(sscore.sc30)) %>% 
+  mutate(rank.sc30 = row_number()) %>% 
+  ungroup()
+```
+
+```{r}
+gsea_df_ranked %>% 
+  ggplot() + 
+  aes(rank.bulk9, rank.sc30) + 
+  geom_density_2d_filled() + 
+  geom_point(color = "white", size = 0.1, stroke = 0.1) +
+  stat_cor(method = "spearman", color = "white") +
+  facet_grid(~Clusters)
+```
+
+
+```{r, fig.asp = 1, fig.width = 6}
+h_mtx_df <- gsea_df_ranked %>% 
+  filter(Clusters == "progenitor") %>% 
+  arrange(rank.sc30) %>% 
+  dplyr::select(gs_name, rank.sc30, rank.bulk9)
+h_mtx <- h_mtx_df %>% 
+  column_to_rownames("gs_name") %>% 
+  as.matrix()
+
+gs_name_label <- c("HALLMARK_OXIDATIVE_PHOSPHORYLATION", 
+                   "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", 
+                   "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", 
+                   "GSE9650_EFFECTOR_VS_MEMORY_CD8_TCELL_UP", 
+                   "GSE9650_EFFECTOR_VS_MEMORY_CD8_TCELL_DN", 
+                   "REACTOME_CELL_CYCLE")
+indices <- map_int(gs_name_label, ~which(rownames(h_mtx) == ..1)[1])
+ha <- rowAnnotation(
+  gs_name = anno_mark(at = indices, labels = gs_name_label, 
+                      side = "left")
+)
+h <- Heatmap(
+  h_mtx,
+  name = "rank\n(by pval,\nsscore)", 
+  col = colorRamp2(breaks = c(0,floor(nrow(h_mtx) / 2), nrow(h_mtx)),
+                   colors = c("#007FFF", "white", "grey20")),
+  show_row_names = FALSE,
+  cluster_rows = FALSE,
+  cluster_columns = FALSE, 
+  left_annotation = ha
+)
+draw(h, column_title = "Progenitor exhausted")
+```
+
+
+
+```{r, fig.asp = 1, fig.width = 6}
+h_mtx_df <- gsea_df_ranked %>% 
+  filter(Clusters == "terminal") %>% 
+  arrange(rank.sc30) %>% 
+  dplyr::select(gs_name, rank.sc30, rank.bulk9)
+h_mtx <- h_mtx_df %>% 
+  column_to_rownames("gs_name") %>% 
+  as.matrix()
+
+gs_name_label <- c("HALLMARK_OXIDATIVE_PHOSPHORYLATION", 
+                   "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", 
+                   "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", 
+                   "GSE9650_EFFECTOR_VS_MEMORY_CD8_TCELL_UP", 
+                   "GSE9650_EFFECTOR_VS_MEMORY_CD8_TCELL_DN", 
+                   "REACTOME_CELL_CYCLE")
+indices <- map_int(gs_name_label, ~which(rownames(h_mtx) == ..1)[1])
+ha <- rowAnnotation(
+  gs_name = anno_mark(at = indices, labels = gs_name_label, 
+                      side = "left")
+)
+h <- Heatmap(
+  h_mtx,
+  name = "rank\n(by pval,\nsscore)", 
+  col = colorRamp2(breaks = c(0, floor(nrow(h_mtx) / 2), nrow(h_mtx)),
+                   colors = c("#007FFF", "white", "grey20")),
+  show_row_names = FALSE,
+  cluster_rows = FALSE,
+  cluster_columns = FALSE, 
+  left_annotation = ha
+)
+draw(h, column_title = "Terminally exhausted")
+```
+
+

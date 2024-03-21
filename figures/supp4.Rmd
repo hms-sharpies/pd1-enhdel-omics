@@ -60,7 +60,7 @@ gene_sig_df <- read_tsv(here("scRNAseq", "data", "gene_signatures",
 pb_pca_genes <- read_tsv(here("scRNAseq", "data", "gene_signatures", "pb_pca_genes.tsv"))
 ```
 
-# Supplementary Figure 4a
+# 4a
 
 ```{r mean_scaled_norm_counts}
 scaled_norm_counts <- norm_counts %>% 
@@ -161,7 +161,7 @@ plot_supp4a <- function() {
 plot_supp4a()
 ```
 
-# Supplementary Figure 4b
+# 4b
 
 ```{r p_Car2 and p_Cd7}
 gene_df <- as_tibble(t(so@assays$RNA@data[c("Car2", "Cd7"), ]), 
@@ -205,7 +205,7 @@ plot_supp4b <- function() {
 plot_supp4b()
 ```
 
-# Supplementary Figure 4c
+# 4c
 
 ```{r gene_df and plot_df}
 gene_df <- t(so@assays$RNA@data[c("Tox", "Ikzf2"), ]) %>% 
@@ -280,7 +280,7 @@ plot_supp4c <- function() {
 plot_supp4c()
 ```
 
-# Supplementary Figure 4d and 4e
+# 4d and 4e
 
 ```{r rank_vec_list}
 rank_vec_list <- dge_df %>% 
@@ -332,24 +332,41 @@ theme_set(figure_layout_theme())
 ```
 
 ```{r plot_supp4d, fig.width = 7, fig.asp = 1/3}
-plot_supp4d <- function(rel_plot_size = 2, 
-                       rel_heights = c(1, 9), 
-                       rel_widths = c(1, 12)) {
-  p <- plot_gsea_curve_grid(apoptosis_leg_list, apoptosis_df, 
-                            rel_plot_size = rel_plot_size, 
-                            annotate_coords = c(x = 0.025, y = 0.1), 
-                            text_size = 5*GGPLOT_TEXT_SCALE_FACTOR)
+plot_supp4d <- function(rel_plot_size = 2,
+                        rel_heights = c(1, 9),
+                        rel_widths = c(1, 12)) {
+  p <- plot_gsea_curve_grid(
+    apoptosis_leg_list,
+    apoptosis_df,
+    rel_plot_size = rel_plot_size,
+    annotate_coords = c(x = 0.025, y = 0.1),
+    text_size = 5 * GGPLOT_TEXT_SCALE_FACTOR, 
+    line_width = 0.1, 
+    use_alt_tick_function = TRUE
+  )
   plot_grid(
-    NULL, cluster_ann + 
-      annotate("text", x = 0.5, y = 1, label = "HAMAI_APOPTOSIS_VIA_TRAIL_UP", size = PLOT_TITLE_SIZE*GGPLOT_TEXT_SCALE_FACTOR, hjust = 0) + 
-      ylim(-0.5, 1.5) + 
-      scale_x_discrete(expand = c(0, 0.5)), 
-    contrast_ann, p, 
-    ncol = 2, rel_heights = rel_heights, rel_widths = rel_widths
+    NULL,
+    cluster_ann +
+      annotate(
+        "text",
+        x = 0.5,
+        y = 1,
+        label = "HAMAI_APOPTOSIS_VIA_TRAIL_UP",
+        size = PLOT_TITLE_SIZE * GGPLOT_TEXT_SCALE_FACTOR,
+        hjust = 0
+      ) +
+      ylim(-0.5, 1.5) +
+      scale_x_discrete(expand = c(0, 0.5)),
+    contrast_ann,
+    p,
+    ncol = 2,
+    rel_heights = rel_heights,
+    rel_widths = rel_widths
   )
 }
 plot_supp4d(rel_plot_size = 1.75)
 ```
+
 
 ```{r plot_supp4e, fig.width = 7, fig.asp = 1/3}
 plot_supp4e <- function(rel_plot_size = 2, 
@@ -357,7 +374,8 @@ plot_supp4e <- function(rel_plot_size = 2,
                        rel_widths = c(1, 12)) {
   p <- plot_gsea_curve_grid(treg_leg_list, treg_df, 
                             rel_plot_size = rel_plot_size, 
-                            annotate_coords = c(x = 0.025, y = 0.2))
+                            annotate_coords = c(x = 0.025, y = 0.2), 
+                            use_alt_tick_function = TRUE)
   plot_grid(
     NULL, cluster_ann + 
       annotate("text", x = 0.5, y = 1, label = "TREG_VS_TEFF_UP", size = PLOT_TITLE_SIZE*GGPLOT_TEXT_SCALE_FACTOR, hjust = 0) + 
@@ -370,39 +388,161 @@ plot_supp4e <- function(rel_plot_size = 2,
 plot_supp4e(rel_plot_size = 1.75)
 ```
 
-# Supplementary Figure 4 Layout
+# Off-target effects
 
-\newpage
-
-```{r Supplementary Figure 4, fig.height = 10, fig.width = 7.5}
-theme_set(figure_layout_theme())
-
-r1_height <- 0.25
-r1_bot_align <- 1 - r1_height
-r2_height <- 0.15
-r2_bot_align <- r1_bot_align - r2_height
-r3_height <- 0.25
-r3_bot_align <- r2_bot_align - r3_height - 0.025
-r4_height <- 0.25
-r4_bot_align <- r3_bot_align - r4_height - 0.025
-
-ggdraw() + 
-  draw_plot(plot_supp4a(), 0, r1_bot_align, 0.6, r1_height) + 
-  draw_plot(plot_supp4b(), 0.6, r1_bot_align + 0.05, 0.4, r1_height - 0.1) +
-  draw_plot(plot_supp4c(), 0.15, r2_bot_align, 0.7, r2_height) +
-  draw_plot(plot_supp4d(), 0, r3_bot_align, 1, r3_height) +
-  draw_plot(plot_supp4e(), 0, r4_bot_align, 1, r4_height) +
-  draw_plot_label(label = c("a", "b", "c", "d", "e"), 
-                  size = PLOT_TITLE_SIZE, 
-                  x = c(0, 0.6, 0, 0, 0), 
-                  y = c(r1_height + r1_bot_align, 
-                        r1_height + r1_bot_align, 
-                        r2_height + r2_bot_align, 
-                        r3_height + r3_bot_align,
-                        r4_height + r4_bot_align))
+```{r}
+off_target_genes <- c("2900026A02Rik",
+                      "Cmtr2",
+                      "Lrrc23",
+                      "Perp",
+                      "Snx12",
+                      "Vgll4",
+                      "Zc3h13")
+gene_expr_tidy <- 
+  get_metadata_from_so(so, genes = off_target_genes) %>% 
+  pivot_longer(cols = all_of(off_target_genes))
 ```
 
+```{r, fig.width = 3.5, fig.height = 1.5}
+gene_expr_tidy %>% 
+  filter(genotype != "K") %>% 
+  filter(cluster_ids != "dividing") %>% 
+  ggplot() + 
+  aes(genotype, value, fill = genotype) + 
+  geom_violin(scale = "width", size = 0.2, stroke = 0.1) + 
+  facet_grid(cluster_ids~name) + 
+  remove_x_spine() +
+  theme(
+    strip.background = element_blank(),
+    legend.position = "none",
+    strip.text.y = element_text(angle = 0, hjust = 0)
+  ) + 
+  scale_fill_manual(values = palette_genotype) + 
+  scale_y_continuous(expand = c(0, 0), 
+                     limits = ~c(..1[1], ..1[2]*1.3), 
+                     breaks = c(0, 2, 4)) + 
+  stat_compare_means(comparison = list(c("D", "W")), 
+                     label = "p.signif", 
+                     size = 1.5)
+```
+
+# Early timepoint bulk RNAseq
+
+```{r}
+gsea_harmonized_df <- 
+  readRDS(here("bulkRNAseq", "results", "gsea_sc.bulk.harmonized.rds"))
+gsea_bulk9_df <-
+  gsea_harmonized_df %>%
+  dplyr::select(gs_name, Clusters, str_subset(colnames(.), "bulk9"))
+colnames(gsea_bulk9_df) <- str_remove(colnames(gsea_bulk9_df), "\\.bulk9")
+
+dge_bulk_df <- readRDS(here("bulkRNAseq", "results", "dge_df.rds"))
+```
+
+## GSEA
+
+```{r}
+make_rank_list <- function(.data,
+                           gene = gene,
+                           rank_by = log2FoldChange) {
+  rank_by <- enquo(rank_by)
+  gene <- enquo(gene)
+  data_fc <- .data %>%
+    arrange(desc(!!rank_by))
+  data_fc %>%
+    .[[rlang::as_name(rank_by)]] %>%
+    set_names(data_fc[[rlang::as_name(gene)]])
+}
+rank_lists <- dge_bulk_df %>%
+  named_group_split(cluster_id) %>%
+  map(~make_rank_list(..1, rank_by = signed_neglog10_p, gene = gene))
+```
+
+### HALLMARK_OXIDATIVE_PHOSPHORYLATION
+
+```{r}
+oxphos_genes <- gene_sig_df %>% 
+  filter(gs_name == "HALLMARK_OXIDATIVE_PHOSPHORYLATION") %>% 
+  .$gene_symbol
+
+Rsc::get_leading_edge_df(rank_lists$progexh, gs_vec = oxphos_genes) %>%
+  plot_gsea_curve_pretty("progenitor", show.legend = FALSE, 
+                         annotate_df = gsea_bulk9_df %>% 
+                           filter(Clusters == "progenitor") %>% 
+                           filter(gs_name == "HALLMARK_OXIDATIVE_PHOSPHORYLATION"), 
+                         text_size = 3, 
+                         pt_size = 1)
+Rsc::get_leading_edge_df(rank_lists$termexh, gs_vec = oxphos_genes) %>%
+  plot_gsea_curve_pretty("terminal", show.legend = FALSE, 
+                         annotate_df = gsea_bulk9_df %>% 
+                           filter(Clusters == "terminal") %>% 
+                           filter(gs_name == "HALLMARK_OXIDATIVE_PHOSPHORYLATION"), 
+                         text_size = 3, 
+                         pt_size = 1)
+```
+
+
+### GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP
+
+```{r}
+exh_genes <- gene_sig_df %>% 
+  filter(gs_name == "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP") %>% 
+  .$gene_symbol
+
+Rsc::get_leading_edge_df(rank_lists$progexh, gs_vec = exh_genes) %>%
+  plot_gsea_curve_pretty("progenitor", show.legend = FALSE, 
+                         annotate_df = gsea_bulk9_df %>% 
+                           filter(Clusters == "progenitor") %>% 
+                           filter(gs_name == "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP"), 
+                         text_size = 3, 
+                         pt_size = 1)
+Rsc::get_leading_edge_df(rank_lists$termexh, gs_vec = exh_genes) %>%
+  plot_gsea_curve_pretty("terminal", show.legend = FALSE, 
+                         annotate_df = gsea_bulk9_df %>% 
+                           filter(Clusters == "terminal") %>% 
+                           filter(gs_name == "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP"), 
+                         text_size = 3, 
+                         pt_size = 1)
+```
+
+
+
+
+
+## Overlap in signif gs enriched in enhdels
+
+```{r}
+print("Progenitor")
+
+signif_tbl <- gsea_harmonized_df %>% 
+  filter(Clusters == "progenitor") %>% 
+  mutate(signif_up.sc30 = sscore.sc30 > 0 & q.val.sc30 < 0.05) %>% 
+  mutate(signif_up.bulk9 = sscore.bulk9 > 0 & q.val.bulk9 < 0.05) %>%
+  dplyr::select(signif_up.bulk9, signif_up.sc30) %>% 
+  table()
+print(signif_tbl)
+
+fisher.test(signif_tbl)
+```
+
+```{r}
+print("Terminal")
+
+signif_tbl <- gsea_harmonized_df %>% 
+  filter(Clusters == "terminal") %>% 
+  mutate(signif_up.sc30 = sscore.sc30 > 0 & q.val.sc30 < 0.05) %>% 
+  mutate(signif_up.bulk9 = sscore.bulk9 > 0 & q.val.bulk9 < 0.05) %>%
+  dplyr::select(signif_up.bulk9, signif_up.sc30) %>% 
+  table()
+print(signif_tbl)
+
+fisher.test(signif_tbl)
+```
+
+
 \newpage
+
+# END
 
 ```{r sessionInfo}
 sessionInfo()

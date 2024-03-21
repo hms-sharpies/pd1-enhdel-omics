@@ -41,15 +41,11 @@ sample_D30_metadata_df <- read_tsv(here("bulkRNAseq", "results", "sample_metadat
 ```
 
 ```{r}
-list.files(here("bulkRNAseq", "results")) %>% str_subset("norm")
-
 norm_counts_D9 <- readRDS(here("bulkRNAseq", "results", "deseq_norm_counts_D9_exh.prog.vs.term.rds")) %>% 
   as_tibble(rownames = "gene")
 
 norm_counts_D30 <- readRDS(here("bulkRNAseq", "results", "deseq_norm_counts_D30_exh.prog.vs.term.rds")) %>% 
   as_tibble(rownames = "gene")
-
-# norm_counts_D9 <- readRDS(here("bulkRNAseq", "results", "deseq_norm_counts_D9_all_clusters_genotype.Enhdel.v.WT.rds"))
 ```
 
 ```{r}
@@ -95,7 +91,7 @@ gs_subset_tcell_list <- gs_subset_tcell_df %>%
 
 ```{r}
 gsea_D9_tcell <- read_tsv(
-  here("bulkRNAseq", "results", "gsea_tcell.exh_wide_D9_genotype.Enhdel.v.WT.txt")
+  here("bulkRNAseq", "results", "gsea_tcell_wide_D9_genotype.Enhdel.v.WT.txt")
 )
 gsea_D9_bp <- read_tsv(
   here("bulkRNAseq", "results", "gsea_bp_wide_D9_genotype.Enhdel.v.WT.txt")
@@ -321,6 +317,10 @@ rank_lists <- dge_df %>%
 ```
 
 ```{r}
+saveRDS(dge_df, here("bulkRNAseq", "results" ,"dge_df.rds"))
+```
+
+```{r}
 my_plot_gsea_curve <- function(gsea_res, rank_list, gs_subset_list, gs_name_str, exh_cluster) {
   my_gs <- gsea_res %>%
     filter(gs_name == gs_name_str)
@@ -346,74 +346,120 @@ my_plot_gsea_curve <- function(gsea_res, rank_list, gs_subset_list, gs_name_str,
 ```
 
 ```{r, fig.asp = 1, fig.width = 4}
-my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "REACTOME_CELL_CYCLE", "progexh") + 
+my_plot_gsea_curve(gsea_D9_bp, rank_lists, gs_subset_bp_list, "REACTOME_CELL_CYCLE", "progexh") + 
     ylim(-0.3, 0.3)
-my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "REACTOME_CELL_CYCLE", "transexh") + 
+my_plot_gsea_curve(gsea_D9_bp, rank_lists, gs_subset_bp_list, "REACTOME_CELL_CYCLE", "transexh") + 
     ylim(-0.3, 0.3)
-my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "REACTOME_CELL_CYCLE", "termexh") + 
+my_plot_gsea_curve(gsea_D9_bp, rank_lists, gs_subset_bp_list, "REACTOME_CELL_CYCLE", "termexh") + 
     ylim(-0.3, 0.3)
 ```
 
 ```{r, fig.asp = 1, fig.width = 4}
-my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "progexh") + 
+my_plot_gsea_curve(gsea_D9_bp, rank_lists, gs_subset_bp_list, "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "progexh") + 
     ylim(-0.3, 0.3)
-my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "transexh") + 
+my_plot_gsea_curve(gsea_D9_bp, rank_lists, gs_subset_bp_list, "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "transexh") + 
     ylim(-0.3, 0.3)
-my_plot_gsea_curve(gsea_res_bp, rank_lists, gs_subset_bp_list, "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "termexh") + 
+my_plot_gsea_curve(gsea_D9_bp, rank_lists, gs_subset_bp_list, "HALLMARK_OXIDATIVE_PHOSPHORYLATION", "termexh") + 
     ylim(-0.3, 0.3)
 ```
 
 
 ```{r, fig.asp = 1, fig.width = 4}
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN", "progexh") + 
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN", "progexh") + 
   ylim(-0.23, 0.23)
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP", "progexh") + 
-  ylim(-0.23, 0.23)
-
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN", "transexh") + 
-  ylim(-0.23, 0.23)
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP", "transexh")  + 
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP", "progexh") + 
   ylim(-0.23, 0.23)
 
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN", "termexh") + 
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN", "transexh") + 
   ylim(-0.23, 0.23)
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP", "termexh") + 
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP", "transexh")  + 
+  ylim(-0.23, 0.23)
+
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_DN", "termexh") + 
+  ylim(-0.23, 0.23)
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EXHAUSTED_VS_MEMORY_CD8_TCELL_UP", "termexh") + 
   ylim(-0.23, 0.23)
 ```
 
 ```{r, fig.asp = 1, fig.width = 4}
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", "progexh") + 
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", "progexh") + 
   ylim(-0.23, 0.23)
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", "progexh") + 
-  ylim(-0.23, 0.23)
-
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", "transexh") + 
-  ylim(-0.23, 0.23)
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", "transexh") + 
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", "progexh") + 
   ylim(-0.23, 0.23)
 
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", "termexh") + 
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", "transexh") + 
   ylim(-0.23, 0.23)
-my_plot_gsea_curve(gsea_res_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", "termexh") + 
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", "transexh") + 
+  ylim(-0.23, 0.23)
+
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_DN", "termexh") + 
+  ylim(-0.23, 0.23)
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists, gs_subset_tcell_list, "GSE9650_EFFECTOR_VS_EXHAUSTED_CD8_TCELL_UP", "termexh") + 
   ylim(-0.23, 0.23)
 ```
 
+```{r}
+gene_sets <- str_subset(names(gs_subset_bp_list), "RUNX")
+gsea_curve_list <- list()
+for (gs in gene_sets) {
+  gsea_curve_list[[paste0("progexh / ", gs)]] <-
+    my_plot_gsea_curve(gsea_D9_bp, rank_lists,
+                       gs_subset_bp_list, gs, "progexh")
+  gsea_curve_list[[paste0("termexh / ", gs)]] <-
+    my_plot_gsea_curve(gsea_D9_bp, rank_lists,
+                       gs_subset_bp_list, gs, "termexh")
+  
+}
+```
+
+```{r}
+gsea_curve_list[c("progexh / REACTOME_REGULATION_OF_RUNX3_EXPRESSION_AND_ACTIVITY", 
+                  "termexh / REACTOME_REGULATION_OF_RUNX3_EXPRESSION_AND_ACTIVITY", 
+                  "progexh / REACTOME_REGULATION_OF_RUNX2_EXPRESSION_AND_ACTIVITY", 
+                  "termexh / REACTOME_REGULATION_OF_RUNX2_EXPRESSION_AND_ACTIVITY", 
+                  "progexh / REACTOME_TRANSCRIPTIONAL_REGULATION_BY_RUNX2",
+                  "termexh / REACTOME_TRANSCRIPTIONAL_REGULATION_BY_RUNX2",
+                  "progexh / REACTOME_TRANSCRIPTIONAL_REGULATION_BY_RUNX1",
+                  "termexh / REACTOME_TRANSCRIPTIONAL_REGULATION_BY_RUNX1")]
+```
+
+```{r}
+Rsc::get_leading_edge_df(rank_vec = rank_lists[["progexh"]],
+                           gs_vec = gs_subset_bp_list[["REACTOME_TRANSCRIPTIONAL_REGULATION_BY_RUNX1"]]) %>% 
+  # filter(is_leading_edge) %>% 
+  filter(in_gs) %>% 
+  write_tsv(here("bulkRNAseq", "results", "leadingedge_progexh_D9_REACTOME_TRANSCRIPTIONAL_REGULATION_BY_RUNX1.txt"))
+```
 
 
 ```{r}
-
-# gsea_res_bp_filtered <- gsea_res_bp %>%
-#   filter(q.val_progexh < 0.05 & q.val_transexh < 0.05 &
-#            q.val_termexh < 0.05) %>%
-#   dplyr::select(gs_name, str_subset(colnames(.), "sscore"))
-# View(gsea_res_bp_filtered)
-
-# gsea_res_tcell_filtered <- gsea_res_tcell %>%
-  # filter(q.val_progexh < 0.05 & q.val_transexh < 0.05 &
-  #          q.val_termexh < 0.05) %>%
-  # dplyr::select(gs_name, str_subset(colnames(.), "sscore"))
-# View(gsea_res_tcell_filtered)
-
+Rsc::get_leading_edge_df(rank_vec = rank_lists[["progexh"]],
+                           gs_vec = gs_subset_bp_list[["REACTOME_REGULATION_OF_RUNX2_EXPRESSION_AND_ACTIVITY"]]) %>% 
+  # filter(is_leading_edge) %>% 
+  filter(in_gs) %>% 
+  write_tsv(here("bulkRNAseq", "results", "leadingedge_progexh_D9_REACTOME_REGULATION_OF_RUNX2_EXPRESSION_AND_ACTIVITY.txt"))
 ```
+
+
+```{r}
+Rsc::get_leading_edge_df(rank_vec = rank_lists[["progexh"]],
+                           gs_vec = gs_subset_bp_list[["REACTOME_REGULATION_OF_RUNX3_EXPRESSION_AND_ACTIVITY"]]) %>% 
+  # filter(is_leading_edge) %>% 
+  filter(in_gs) %>% 
+  write_tsv(here("bulkRNAseq", "results", "leadingedge_progexh_D9_REACTOME_REGULATION_OF_RUNX3_EXPRESSION_AND_ACTIVITY.txt"))
+```
+
+```{r}
+Rsc::get_leading_edge_df(rank_vec = rank_lists[["termexh"]],
+                           gs_vec = gs_subset_tcell_list[["GOLDRATH_EFF_VS_MEMORY_CD8_TCELL_UP"]]) %>% 
+  filter(is_leading_edge) %>% 
+  filter(in_gs)
+gs <- "GOLDRATH_EFF_VS_MEMORY_CD8_TCELL_UP"
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists,
+                   gs_subset_tcell_list, gs, "progexh")
+my_plot_gsea_curve(gsea_D9_tcell, rank_lists,
+                   gs_subset_tcell_list, gs, "termexh")
+```
+
 
 

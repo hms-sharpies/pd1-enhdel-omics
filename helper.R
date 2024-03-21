@@ -153,21 +153,56 @@ plot_gsea_ticks <- function(leg_df,
 
 }
 
-plot_gsea_curve_pretty <- function(leg_df,
-                                   group_var,
-                                   palette = NA,
-                                   rel_heights = c(4, 1),
-                                   show.legend = TRUE,
-                                   pt_size = 3,
-                                   text_size = 1,
-                                   line_size = 1,
-                                   tick_size = 3,
-                                   tick_stroke = 0.1,
-                                   annotate_df = NA,
-                                   annotate_coords = c(0.7, 0.8),
-                                   annotate_df_FDR_col = q.val,
-                                   annotate_df_sscore_col = sscore,
-                                   annotate_df_filters = NULL) {
+plot_gsea_ticks2 <- function(leg_df, group_var) {
+  group_var <- enquo(group_var)
+
+  tick_plot <- leg_df %>%
+    filter(in_gs) %>%
+    ggplot() +
+    aes(x = rank, y = !!group_var) +
+    geom_segment(aes(xend = rank, y = 1, yend = 0),
+                 size = 0.1,
+                 alpha = 0.5) +
+    xlim(min(leg_df$rank), max(leg_df$rank)) +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = expansion(0.5)) +
+    theme(
+      axis.line = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank()
+    )
+
+  n_groups <-
+    leg_df[[rlang::as_name(group_var)]] %>% unique() %>% length()
+  if (n_groups == 1) {
+    tick_plot <- tick_plot +
+      theme(axis.title.y = element_blank())
+  } else {
+    stop("Function not designed for more than one group at the moment. ")
+  }
+
+  return(tick_plot)
+
+}
+
+plot_gsea_curve_pretty <- function(
+    leg_df,
+    group_var,
+    palette = NA,
+    rel_heights = c(4, 1),
+    show.legend = TRUE,
+    pt_size = 3,
+    text_size = 1,
+    line_size = 1,
+    tick_size = 3,
+    tick_stroke = 0.1,
+    annotate_df = NA,
+    annotate_coords = c(0.7, 0.8),
+    annotate_df_FDR_col = q.val,
+    annotate_df_sscore_col = sscore,
+    annotate_df_filters = NULL,
+    use_alt_tick_function = FALSE
+) {
   # e.g. list(Cluster = "prog.")
   group_var <- enquo(group_var)
   annotate_df_FDR_col <- enquo(annotate_df_FDR_col)
@@ -179,12 +214,21 @@ plot_gsea_curve_pretty <- function(leg_df,
     pt_size = pt_size,
     line_size = line_size
   ) + theme(plot.margin = margin(r = 5, l = 5))
-  p_leg_ticks <- plot_gsea_ticks(
-    leg_df,
-    group_var = !!group_var,
-    pt_size = tick_size,
-    pt_stroke = tick_stroke
-  ) + theme(plot.margin = margin(r = 5, l = 5))
+
+  if (use_alt_tick_function) {
+    p_leg_ticks <- plot_gsea_ticks2(
+      leg_df,
+      group_var = !!group_var
+    ) + theme(plot.margin = margin(r = 5, l = 5))
+  } else {
+    p_leg_ticks <- plot_gsea_ticks(
+      leg_df,
+      group_var = !!group_var,
+      pt_size = tick_size,
+      pt_stroke = tick_stroke
+    ) + theme(plot.margin = margin(r = 5, l = 5))
+
+  }
 
   if (!is.na(palette_cluster)) {
     p_leg <- p_leg +
@@ -237,7 +281,9 @@ plot_gsea_curve_grid <- function(leg_list,
                                  gsea_df,
                                  rel_plot_size = 2,
                                  annotate_coords = c(0.05, 0.8),
-                                 text_size = TEXT_SIZE * GGPLOT_TEXT_SCALE_FACTOR) {
+                                 text_size = TEXT_SIZE * GGPLOT_TEXT_SCALE_FACTOR,
+                                 line_width = LINE_WIDTH,
+                                 use_alt_tick_function = FALSE) {
   leg_list %>%
     imap( ~ {
       contrast_str <- str_extract(..2, ".* / ") %>% str_sub(end = -4)
@@ -248,7 +294,7 @@ plot_gsea_curve_grid <- function(leg_list,
         Clusters,
         palette_cluster,
         pt_size = 0.1,
-        line_size = LINE_WIDTH,
+        line_size = line_width,
         tick_stroke = 0.1,
         rel_heights = c(rel_plot_size, 1),
         show.legend = FALSE,
@@ -256,7 +302,8 @@ plot_gsea_curve_grid <- function(leg_list,
         annotate_coords = annotate_coords,
         annotate_df_filters = list(Clusters = cluster_str,
                                    contrast = contrast_str),
-        text_size = text_size
+        text_size = text_size,
+        use_alt_tick_function = use_alt_tick_function
       )
     }) %>%
     plot_grid(plotlist = ., ncol = 4)
